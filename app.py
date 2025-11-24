@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import config
 from gemma_rag_system import GemmaRAGSystem
@@ -16,33 +17,15 @@ LOG_FILE = "question_logs.json"
 
 
 def apply_custom_css():
-    st.markdown("""
-        <style>
-        /* Main container styling */
-        .main {
-            background-color: #f5f7fa;
-        }
-        .header-container {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 2rem;
-            border-radius: 10px;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header-title { color: white; font-size: 2.5rem; font-weight: bold; margin: 0; }
-        .header-subtitle { color: #e0e7ff; font-size: 1.1rem; margin-top: 0.5rem; }
-        .stChatMessage { background-color: white; border-radius: 10px; padding: 1rem; margin: 0.5rem 0; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
-        .css-1d391kg { background-color: #ffffff; }
-        .stButton>button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 600; transition: all 0.3s ease; }
-        .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3); }
-        .info-box { background-color: #e0e7ff; border-left: 4px solid #667eea; padding: 1rem; border-radius: 5px; margin: 1rem 0; }
-        .success-box { background-color: #d1fae5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 5px; margin: 1rem 0; }
-        .warning-box { background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 5px; margin: 1rem 0; }
-        .stat-card { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); margin: 0.5rem 0; }
-        .stat-value { font-size: 1.8rem; font-weight: bold; color: #667eea; }
-        .stat-label { color: #6b7280; font-size: 0.9rem; margin-top: 0.3rem; }
-        </style>
-    """, unsafe_allow_html=True)
+    """Load custom CSS from external file"""
+    css_file = os.path.join(os.path.dirname(__file__), "static", "custom.css")
+
+    if os.path.exists(css_file):
+        with open(css_file, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+    else:
+        st.warning("Custom CSS file not found. Using default styling.")
 
 
 def render_header():
@@ -503,6 +486,10 @@ def main():
     st.set_page_config(page_title="Gemma AI Assistant", page_icon="🤖",
                        layout="wide", initial_sidebar_state="expanded")
     apply_custom_css()
+    st.logo(
+        image="https://www.leaplogic.io/wp-content/themes/leaplogic/assets/images/logo-leaplogic-impetus.svg",
+        size="medium", # Options: "small", "medium", "large"
+        )
     initialize_session_state()
 
     # Initialize knowledge bases
