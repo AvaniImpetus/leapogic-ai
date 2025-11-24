@@ -135,7 +135,7 @@ class QuestionLogger:
 
 def render_sidebar(system):
     with st.sidebar:
-        st.markdown("### 📚 About")
+        st.markdown("### � About")
         st.markdown("""
             <div class="info-box">
             <b>Gemma Documentation Assistant</b><br>
@@ -177,9 +177,8 @@ def render_sidebar(system):
         if st.button("🔄 Reload Database", use_container_width=True):
             with st.spinner("Reloading vector database..."):
                 try:
-                    # Recreate system to reload KB
-                    st.session_state.system = GemmaRAGSystem()
-                    st.session_state.db_loaded = True
+                    # Reload KB without overwriting existing
+                    st.session_state.system.reload_knowledge_base()
                     st.success("Database reloaded successfully!")
                 except Exception as e:
                     st.error(f"Failed to reload database: {e}")
@@ -229,6 +228,8 @@ def initialize_session_state():
                 st.session_state.db_loaded = False
     if "show_review_dashboard" not in st.session_state:
         st.session_state.show_review_dashboard = False
+    if "kb_choice" not in st.session_state:
+        st.session_state.kb_choice = "Leaplogic"
 
 
 def display_welcome_message():
@@ -243,22 +244,39 @@ def display_welcome_message():
         unsafe_allow_html=True,
     )
 
-    st.markdown("### 💭 Example Questions")
+    # Get current knowledge base selection
+    kb_choice = st.session_state.get("kb_choice", "Leaplogic")
+    file_filter = st.session_state.get("file_filter")
+    is_leaplogic = file_filter is not None or kb_choice == "Leaplogic"
+
+    kb_name = "Leaplogic" if is_leaplogic else "Common Framework"
+
+    st.markdown(f"### 💭 Example Questions")
     col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📖 What is this project about?", use_container_width=True):
-            process_user_question("What is this project about?")
-            st.rerun()
-        if st.button("🎯 How do I get started?", use_container_width=True):
-            process_user_question("How do I get started with this project?")
-            st.rerun()
-    with col2:
-        if st.button("⚙️ Configuration options?", use_container_width=True):
-            process_user_question("What are the main configuration options?")
-            st.rerun()
-        if st.button("🐛 Troubleshooting help?", use_container_width=True):
-            process_user_question("What are common troubleshooting steps?")
-            st.rerun()
+
+    if is_leaplogic:
+        # Leaplogic questions
+        with col1:
+            if st.button("🔄 How does LeapLogic convert the QUALIFY clause?", use_container_width=True):
+                process_user_question(
+                    "How does LeapLogic convert the QUALIFY clause from Teradata to PySpark?")
+                st.rerun()
+        with col2:
+            if st.button("🔤 What does the TO_CHAR function do?", use_container_width=True):
+                process_user_question(
+                    "What does the TO_CHAR function do in LeapLogic conversion?")
+                st.rerun()
+
+    else:
+        # Common Framework questions
+        with col1:
+            if st.button("🏗️ What does the framework do?", use_container_width=True):
+                process_user_question("What does the WMG framework do?")
+                st.rerun()
+        with col2:  
+            if st.button("⚙️ How is a query executed on Glue?", use_container_width=True):
+                process_user_question("How is a query executed on AWS Glue?")
+                st.rerun()
 
 
 def display_chat_history():
@@ -336,7 +354,8 @@ def process_user_question(question: str):
         with st.spinner("🤔 Thinking..."):
             try:
                 system = st.session_state.system
-                result = system.answer_question(question)
+                result = system.answer_question(
+                    question, file_filter=st.session_state.get("file_filter"))
                 answer = result.get("answer", "")
                 search_results = result.get("search_results", [])
                 sources_md = format_sources(search_results)
@@ -485,6 +504,50 @@ def main():
                        layout="wide", initial_sidebar_state="expanded")
     apply_custom_css()
     initialize_session_state()
+
+    # Initialize knowledge bases
+    if 'system_leaplogic' not in st.session_state:
+        with st.spinner("Loading Leaplogic knowledge base..."):
+            st.session_state.system_leaplogic = GemmaRAGSystem(
+                docs_folder="docs/leaplogic", db_file="vector_leaplogic.db")
+    if 'system_common' not in st.session_state:
+        with st.spinner("Loading Common Framework knowledge base..."):
+            st.session_state.system_common = GemmaRAGSystem(
+                docs_folder="docs/common", db_file="vector_common.db")
+
+    st.session_state.db_loaded = True
+
+    # Knowledge base selector in sidebar
+    with st.sidebar:
+        kb_choice = st.selectbox(
+            "Select Knowledge Base",
+            ["Leaplogic", "Common Framework"],
+            index=0,  # Leaplogic as default
+            help="Choose which documentation set to query: Leaplogic-specific docs or general framework docs"
+        )
+        st.session_state.kb_choice = kb_choice
+
+        # Sub-options for Leaplogic
+        if kb_choice == "Leaplogic":
+            source = st.selectbox(
+                "Source", ["Teradata"], index=0, key="source")
+            target = st.selectbox(
+                "Target", ["PySpark", "Redshift"], index=0, key="target")
+            if target == "PySpark":
+                file_filter = "teradata_to_pyspark.md"
+            else:
+                file_filter = "teradata_to_redshift.md"
+        else:
+            file_filter = None
+
+    st.session_state.file_filter = file_filter
+
+    if kb_choice == "Leaplogic":
+        system = st.session_state.system_leaplogic
+    else:
+        system = st.session_state.system_common
+
+    st.session_state.system = system  # For compatibility with existing code
 
     if st.session_state.get("show_review_dashboard", False):
         render_review_dashboard()

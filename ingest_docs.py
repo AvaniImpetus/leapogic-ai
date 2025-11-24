@@ -15,7 +15,9 @@ from embedding_manager import EmbeddingManager
 class DocumentIngestion:
     """Loads markdown files and manages vector database"""
 
-    def __init__(self, embedding_manager: EmbeddingManager):
+    def __init__(self, embedding_manager: EmbeddingManager, docs_folder: str = None, db_file: str = None):
+        self.docs_folder = docs_folder or config.DOCS_FOLDER
+        self.db_file = db_file or config.VECTOR_DB_FILE
         self.embedding_manager = embedding_manager
         self.initialize_vector_db()
 
@@ -23,12 +25,16 @@ class DocumentIngestion:
         """Initialize the vector database"""
         self.initialize_vector_db_file()
 
-    def load_markdown_to_db(self) -> int:
-        """Fetch all markdown files and load them into the vector database"""
-        conn = sqlite3.connect(config.VECTOR_DB_FILE)
+    def load_markdown_to_db(self, overwrite_existing: bool = False) -> int:
+        """Fetch all markdown files and load them into the vector database
+
+        Args:
+            overwrite_existing: If True, overwrite existing entries for files already in the database
+        """
+        conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
 
-        md_files = self.fetch_markdown_files(config.DOCS_FOLDER)
+        md_files = self.fetch_markdown_files(self.docs_folder)
         if not md_files:
             print("⚠ No markdown files found in docs folder")
             conn.close()
@@ -46,9 +52,15 @@ class DocumentIngestion:
                     "SELECT id FROM documents WHERE file_path = ?", (file_path,))
                 existing = cursor.fetchone()
                 if existing:
-                    print(
-                        f"  ⊘ Skipped (already in DB): {os.path.basename(file_path)}")
-                    continue
+                    if not overwrite_existing:
+                        print(
+                            f"  ⊘ Skipped (already in DB): {os.path.basename(file_path)}")
+                        continue
+                    else:
+                        cursor.execute(
+                            "DELETE FROM documents WHERE id = ?", (existing[0],))
+                        print(
+                            f"  ↻ Overwriting: {os.path.basename(file_path)}")
 
                 # Read file content
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -107,8 +119,12 @@ class DocumentIngestion:
 
         conn.close()
         print("=" * 60)
-        print(
-            f"✓ Documentation loading complete! ({total_chunks_added} chunks indexed)\n")
+        if overwrite_existing:
+            print(
+                f"✓ Documentation fully reloaded! All existing entries overwritten. ({total_chunks_added} chunks indexed)\n")
+        else:
+            print(
+                f"✓ Documentation reloaded! New files added, existing skipped. ({total_chunks_added} chunks indexed)\n")
         return total_chunks_added
 
     # ==============================
@@ -116,7 +132,7 @@ class DocumentIngestion:
     # ==============================
     def initialize_vector_db_file(self):
         """Create SQLite database schema for vector embeddings"""
-        conn = sqlite3.connect(config.VECTOR_DB_FILE)
+        conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
 
         # Table for documents metadata
@@ -153,14 +169,15 @@ class DocumentIngestion:
 
         conn.commit()
         conn.close()
-        print(f"✓ Vector database initialized: {config.VECTOR_DB_FILE}")
+        print(f"✓ Vector database initialized: {self.db_file}")
 
     # ==============================
     # MARKDOWN FILE PROCESSING
     # ==============================
     def fetch_markdown_files(self, folder: str) -> List[str]:
-        """Recursively fetch all markdown files from the docs folder"""
+        """Recursively fetch all markdown files from the specified folder"""
         md_files = []
+        folder = folder or self.docs_folder
         if not os.path.exists(folder):
             print(f"⚠ Documentation folder not found: {folder}")
             return md_files

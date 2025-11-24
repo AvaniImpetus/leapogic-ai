@@ -73,26 +73,36 @@ ANSWER:"""
 class GemmaRAGSystem:
     """Complete RAG system combining all components"""
 
-    def __init__(self):
+    def __init__(self, docs_folder: str = None, db_file: str = None):
         print("🚀 Initializing Gemma RAG System")
         print("=" * 60)
 
         # Initialize components
         self.embedding_manager = EmbeddingManager()
-        self.kb_loader = DocumentIngestion(self.embedding_manager)
-        self.searcher = SemanticSearcher(self.embedding_manager)
+        self.kb_loader = DocumentIngestion(
+            self.embedding_manager, docs_folder, db_file)
+        self.searcher = SemanticSearcher(
+            self.embedding_manager, db_file or config.VECTOR_DB_FILE)
         self.answer_generator = GemmaAnswerGenerator()
 
         # Load knowledge base if documents exist
-        self.load_knowledge_base()
+        self.load_knowledge_base(overwrite_existing=True)
 
-    def load_knowledge_base(self):
+    def load_knowledge_base(self, overwrite_existing: bool = False):
         """Load markdown files into vector database"""
-        chunks_loaded = self.kb_loader.load_markdown_to_db()
+        chunks_loaded = self.kb_loader.load_markdown_to_db(
+            overwrite_existing=overwrite_existing)
         if chunks_loaded == 0:
-            print("⚠ No new documents loaded. Using existing database.")
+            if overwrite_existing:
+                print("⚠ No documents reloaded. Database remains unchanged.")
+            else:
+                print("⚠ No new documents loaded. Using existing database.")
 
-    def answer_question(self, question: str) -> dict:
+    def reload_knowledge_base(self):
+        """Reload knowledge base without overwriting existing entries"""
+        self.load_knowledge_base(overwrite_existing=False)
+
+    def answer_question(self, question: str, file_filter: str = None) -> dict:
         """
         Answer a user question using the RAG pipeline
         Returns dict with answer, sources, and metadata
@@ -103,7 +113,7 @@ class GemmaRAGSystem:
         try:
             # Retrieve relevant context
             search_results = self.searcher.search(
-                question, top_k=config.TOP_K_RETRIEVAL)
+                question, top_k=config.TOP_K_RETRIEVAL, file_filter=file_filter)
             search_results = set(search_results)
             if search_results and len(search_results) > 0:
                 # Build context from search results
