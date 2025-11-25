@@ -156,6 +156,16 @@ def render_sidebar(system):
                     <div style="font-size: 0.8rem; color: #D57F00;">{config.GEMMA_MODEL}</div>
                 </div>
             """, unsafe_allow_html=True)
+        with col2:
+            if st.session_state.get("db_loaded", False):
+                stats = system.get_statistics()
+                st.markdown(f"""
+                    <div class="stat-card">
+                        <div class="stat-value">📄</div>
+                        <div class="stat-label">Documentation</div>
+                        <div style="font-size: 0.8rem; color: #D57F00;">{stats.get('documents_loaded', 0)} files, {stats.get('total_chunks', 0)} chunks</div>
+                    </div>
+                """, unsafe_allow_html=True)
         
         st.divider()
 
