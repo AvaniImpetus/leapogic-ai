@@ -1,0 +1,172 @@
+/* Main container styling */
+.main {
+    background-color: #f5f7fa;
+}
+
+/* Target the Streamlit header container */
+.stAppHeader {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px; /* Space between elements */
+    padding-left: 2px;
+    background-color: #24262c;
+    color: #D57F00;
+}
+
+
+/* Ensure all text, icons, and elements in the header are #D57F00 */
+.stAppHeader * {
+    color: #D57F00 !important;
+}
+
+.header-container {
+    background: whitesmoke;
+    padding: 2rem;
+    border-color: #D57F00;
+    border-radius: 10px;
+    color: #D57F00;
+    margin-bottom: 2rem;
+}
+.header-subtitle{
+    color: #D57F00 !important;
+}
+
+.header-title {
+    color: white;
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.header-subtitle {
+    color: #e0e7ff;
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+}
+
+.stChatMessage {
+    background-color: white;
+    border-radius: 10px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.css-1d391kg {
+    background-color: #ffffff;
+}
+
+.stButton>button {
+    color: #D57F00;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.stButton>button:hover {
+    transform: translateY(-2px);
+    color: white;
+    background-color: #D57F00;
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.info-box {
+    background-color: whitesmoke;
+    border-left: 4px solid whitesmoke;
+    padding: 1rem;
+    border-radius: 5px;
+    margin: 1rem 0;
+}
+
+.success-box {
+    background-color: #d1fae5;
+    border-left: 4px solid #10b981;
+    padding: 1rem;
+    border-radius: 5px;
+    margin: 1rem 0;
+}
+
+.warning-box {
+    background-color: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 1rem;
+    border-radius: 5px;
+    margin: 1rem 0;
+}
+
+.stat-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    margin: 0.5rem 0;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.stat-label {
+    color: #6b7280;
+    font-size: 0.9rem;
+    margin-top: 0.3rem;
+}
+
+/* Sidebar toggle button */
+.st-emotion-cache-77vupy.e3g0k5y0 {
+    order: 2; /* Move it after the logo */
+}
+
+/* Logo container */
+.st-emotion-cache-8ezv7j.e3g0k5y3 {
+    order: 1; /* Move logo before the toggle button */
+}
+
+/* Sidebar styling */
+.stSidebar.st-emotion-cache-1legitb.e6f82ta0 {
+    background-color: #24262c !important;
+}
+
+.stSidebar.st-emotion-cache-1legitb.e6f82ta0 * {
+    color: #D57F00 !important;
+}
+
+
+.stButton>button {
+    background: none;
+    background-color: white !important;
+    color: black !important;
+    border: 1px solid #D57F00 !important;
+}
+
+.success-box {
+    background-color: white; /* White background */
+    color: black; /* Text color */
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ccc; /* Optional subtle border */
+    font-size: 16px;
+}
+
+.streamlit-expanderContent ::before{
+    background-color: white !important; /* Set background to white */
+    padding: 12px; /* Optional: add padding */
+    border-radius: 6px; /* Optional: rounded corners */
+}
+
+/* Selectbox options hover styling */
+.stSelectbox option:hover,
+.stSelectbox [role="option"]:hover,
+.stSelectbox div[role="option"]:hover,
+.stSelectbox [data-baseweb="popover"] [role="option"]:hover,
+.stSelectbox ul[role="listbox"] > li:hover,
+.stSelectbox [data-baseweb="menu"] > ul > li:hover {
+    background-color: #D57F00 !important;
+    color: white !important;
+}
+

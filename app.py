@@ -3,54 +3,38 @@ Streamlit UI for Gemma RAG System - mirrors the unrelated/app.py design
 This file provides a Streamlit frontend that calls into the project's
 `GemmaRAGSystem` backend to answer user questions from the knowledge base.
 """
-import json
+import csv
 import os
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import config
 from gemma_rag_system import GemmaRAGSystem
 
-LOG_FILE = "question_logs.json"
+CSV_LOG_DIR = "logged_questions"
+CSV_LOG_FILE = os.path.join(CSV_LOG_DIR, "feedback_log.csv")
 
 
 def apply_custom_css():
-    st.markdown("""
-        <style>
-        /* Main container styling */
-        .main {
-            background-color: #f5f7fa;
-        }
-        .header-container {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 2rem;
-            border-radius: 10px;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header-title { color: white; font-size: 2.5rem; font-weight: bold; margin: 0; }
-        .header-subtitle { color: #e0e7ff; font-size: 1.1rem; margin-top: 0.5rem; }
-        .stChatMessage { background-color: white; border-radius: 10px; padding: 1rem; margin: 0.5rem 0; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
-        .css-1d391kg { background-color: #ffffff; }
-        .stButton>button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 600; transition: all 0.3s ease; }
-        .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3); }
-        .info-box { background-color: #e0e7ff; border-left: 4px solid #667eea; padding: 1rem; border-radius: 5px; margin: 1rem 0; }
-        .success-box { background-color: #d1fae5; border-left: 4px solid #10b981; padding: 1rem; border-radius: 5px; margin: 1rem 0; }
-        .warning-box { background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 5px; margin: 1rem 0; }
-        .stat-card { background: white; padding: 1rem; border-radius: 10px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); margin: 0.5rem 0; }
-        .stat-value { font-size: 1.8rem; font-weight: bold; color: #667eea; }
-        .stat-label { color: #6b7280; font-size: 0.9rem; margin-top: 0.3rem; }
-        </style>
-    """, unsafe_allow_html=True)
+    """Load custom CSS from external file"""
+    css_file = os.path.join(os.path.dirname(__file__), "static", "custom.css")
+
+    if os.path.exists(css_file):
+        with open(css_file, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+    else:
+        st.warning("Custom CSS file not found. Using default styling.")
 
 
 def render_header():
     st.markdown(
         """
         <div class="header-container">
-            <h1 class="header-title">Gemma — Documentation Assistant</h1>
-            <p class="header-subtitle">Ask questions against your docs (RAG)</p>
+            <h1 class="header-title">Leaplogic — Documentation Assistant</h1>
+            <p class="header-subtitle">Ask questions against your queries</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -58,88 +42,106 @@ def render_header():
 
 
 class QuestionLogger:
-    """Minimal question logger stored as JSONL (one JSON object per line)."""
+    """Question logger using session state memory only."""
 
-    def __init__(self, file_path=LOG_FILE):
-        self.file_path = file_path
-        # Ensure directory exists
-        directory = os.path.dirname(self.file_path)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory, exist_ok=True)
+    def __init__(self):
+        self._init_session_storage()
+    
+    def _init_session_storage(self):
+        """Initialize session state storage for feedback logs."""
+        if "feedback_logs" not in st.session_state:
+            st.session_state.feedback_logs = []
 
-        # Create file if missing
-        if not os.path.exists(self.file_path):
-            open(self.file_path, "w", encoding="utf-8").close()
-
-    def log(self, question, answer, sources=None, user_feedback=None, auto_detected=False):
-        entry = {
-            "timestamp": datetime.now().isoformat(),
-            "question": question,
-            "answer": answer,
-            "sources": sources or [],
-            "status": "pending",
-            "notes": "",
-            # "user_feedback": user_feedback or "",
-            # "auto_detected": bool(auto_detected),
+    def log_feedback(self, question, answer, feedback, sources=None):
+        """Log user feedback to session state memory."""
+        self._log_feedback_memory(question, answer, feedback, sources)
+        if feedback not in ["Not Marked"]:
+            st.toast("✅ Feedback logged!", icon="📝")
+    
+    def _log_feedback_memory(self, question, answer, feedback, sources=None):
+        """Log feedback to session state memory."""
+        sources_str = "; ".join(sources) if sources else ""
+        timestamp = datetime.now().isoformat()
+        
+        log_entry = {
+            "Question": question,
+            "Answer": answer,
+            "Feedback": feedback,
+            "Sources": sources_str,
+            "Timestamp": timestamp
         }
-        with open(self.file_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        
+        st.session_state.feedback_logs.append(log_entry)
+    
+    def get_feedback_logs(self):
+        """Get all feedback logs from memory."""
+        return st.session_state.get("feedback_logs", [])
 
-    def get_all_logs(self):
-        print(self.file_path + "json file")
-        logs = []
-        if not os.path.exists(self.file_path):
-            return logs
-        with open(self.file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    logs.append(json.loads(line))
-                except Exception:
-                    # skip malformed lines
-                    continue
-        return logs
-
-    def get_stats(self):
-        logs = self.get_all_logs()
+    def get_feedback_stats(self):
+        """Get statistics from session state feedback logs."""
+        logs = self.get_feedback_logs()
         total = len(logs)
-        pending = len([l for l in logs if l.get(
-            "status") == "pending"]) if total else 0
-        user_reported = len([l for l in logs if l.get(
-            "user_feedback") == "not_helpful"]) if total else 0
-        resolved = len([l for l in logs if l.get(
-            "status") == "resolved"]) if total else 0
-        return {"total": total, "pending": pending, "user_reported": user_reported, "resolved": resolved}
-
-    def update_status(self, timestamp, new_status):
-        logs = self.get_all_logs()
-        updated = False
-        for entry in logs:
-            if entry.get("timestamp") == timestamp:
-                entry["status"] = new_status
-                updated = True
-
-        if updated:
-            # overwrite file with updated logs
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                for entry in logs:
-                    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    def export_to_json(self, out_path="unanswered_questions.json"):
-        logs = self.get_all_logs()
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(logs, f, ensure_ascii=False, indent=2)
+        positive = len([l for l in logs if l.get("Feedback", "").strip().lower() == "helpful"]) if total else 0
+        negative = len([l for l in logs if l.get("Feedback", "").strip().lower() == "not helpful"]) if total else 0
+        not_marked = len([l for l in logs if l.get("Feedback", "").strip() == "Not Marked"]) if total else 0
+        return {"total": total, "positive": positive, "negative": negative, "not_marked": not_marked}
+    
+    def get_storage_info(self):
+        """Get information about the current storage backend."""
+        return {
+            "type": "Session Memory",
+            "description": "Session-based memory storage (no persistence)"
+        }
+    
+    def update_feedback(self, question, answer, new_feedback):
+        """Update feedback for an existing entry in session memory."""
+        logs = st.session_state.get("feedback_logs", [])
+        
+        # Update matching entry (find most recent match)
+        for i in range(len(logs) - 1, -1, -1):  # Start from end
+            if logs[i]["Question"] == question and logs[i]["Answer"] == answer:
+                logs[i]["Feedback"] = new_feedback
+                break
+    
+    def clear_all_logs(self):
+        """Clear all feedback logs from session memory."""
+        st.session_state.feedback_logs = []
+    
+    def export_csv(self):
+        """Generate and export CSV data for download."""
+        logs = self.get_feedback_logs()
+        
+        if not logs:
+            return "Question,Answer,Feedback,Sources,Timestamp\n"  # Empty CSV with headers
+        
+        # Generate CSV content
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(["Question", "Answer", "Feedback", "Sources", "Timestamp"])
+        
+        # Write data rows
+        for log in logs:
+            writer.writerow([
+                log.get("Question", ""),
+                log.get("Answer", ""),
+                log.get("Feedback", ""),
+                log.get("Sources", ""),
+                log.get("Timestamp", "")
+            ])
+        
+        return output.getvalue()
 
 
 def render_sidebar(system):
     with st.sidebar:
-        st.markdown("### � About")
+        st.markdown("### ℹ️ About")
         st.markdown("""
             <div class="info-box">
-            <b>Gemma Documentation Assistant</b><br>
-            Ask questions and get answers based on indexed docs.
+            <b>Leaplogic Documentation Assistant</b><br>
+            Ask questions and get answers on leaplogic and common framework (wm-python).
             </div>
         """, unsafe_allow_html=True)
 
@@ -151,9 +153,20 @@ def render_sidebar(system):
                 <div class="stat-card">
                     <div class="stat-value">🤖</div>
                     <div class="stat-label">Model</div>
-                    <div style="font-size: 0.8rem; color: #374151;">{config.GEMMA_MODEL}</div>
+                    <div style="font-size: 0.8rem; color: #D57F00;">{config.GEMMA_MODEL}</div>
                 </div>
             """, unsafe_allow_html=True)
+        with col2:
+            if st.session_state.get("db_loaded", False):
+                stats = system.get_statistics()
+                st.markdown(f"""
+                    <div class="stat-card">
+                        <div class="stat-value">📄</div>
+                        <div class="stat-label">Documentation</div>
+                        <div style="font-size: 0.8rem; color: #D57F00;">{stats.get('documents_loaded', 0)} files, {stats.get('total_chunks', 0)} chunks</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
         st.divider()
 
         if st.session_state.get("db_loaded", False):
@@ -169,12 +182,18 @@ def render_sidebar(system):
 
         st.divider()
         st.markdown("### 🔧 Actions")
-        if st.button("🗑️ Clear Chat History", use_container_width=True):
+        if st.button("🗑️ Clear Chat History", use_container_width=True, key="clear_chat_button"):
             st.session_state.messages = []
             st.success("Chat history cleared!")
             st.rerun()
+        
+        if st.button("🧹 Clear All Feedback Logs", use_container_width=True):
+            logger = QuestionLogger()
+            logger.clear_all_logs()
+            st.success("All feedback logs cleared!")
+            st.rerun()
 
-        if st.button("🔄 Reload Database", use_container_width=True):
+        if st.button("🔄 Reload Database", use_container_width=True, key="clear_reload_button"):
             with st.spinner("Reloading vector database..."):
                 try:
                     # Reload KB without overwriting existing
@@ -183,7 +202,7 @@ def render_sidebar(system):
                 except Exception as e:
                     st.error(f"Failed to reload database: {e}")
 
-        if st.button("📋 View Logged Questions", use_container_width=True):
+        if st.button("📋 View Logged Questions", use_container_width=True, key="view_logged_questions_button"):
             st.session_state.show_review_dashboard = True
             st.rerun()
 
@@ -236,7 +255,7 @@ def display_welcome_message():
     st.markdown(
         """
         <div style="text-align: center; padding: 3rem 0;">
-            <h2 style="color: #667eea;">👋 Welcome!</h2>
+            <h2 style="color: black;">👋 Welcome!</h2>
             <p style="font-size: 1.1rem; color: #6b7280; margin-top: 1rem;">I'm your AI assistant, ready to help you understand and use the docs.</p>
             <p style="color: #9ca3af; margin-top: 0.5rem;">Ask me anything about the docs below ⬇️</p>
         </div>
@@ -262,9 +281,9 @@ def display_welcome_message():
                     "How does LeapLogic convert the QUALIFY clause from Teradata to PySpark?")
                 st.rerun()
         with col2:
-            if st.button("🔤 What does the TO_CHAR function do?", use_container_width=True):
+            if st.button("🔤 How are Delete Queries converted?", use_container_width=True):
                 process_user_question(
-                    "What does the TO_CHAR function do in LeapLogic conversion?")
+                    "How are Delete Queries converted in LeapLogic?")
                 st.rerun()
 
     else:
@@ -291,38 +310,69 @@ def display_chat_history():
                 col1, col2, col3 = st.columns([1, 1, 8])
                 with col1:
                     if st.button("👍", key=f"helpful_{idx}"):
+                        # Update helpful feedback in CSV
+                        if idx > 0:
+                            user_msg = st.session_state.messages[idx - 1]
+                            assistant_msg = message
+                            logger = QuestionLogger()
+                            logger.update_feedback(
+                                question=user_msg["content"],
+                                answer=assistant_msg["content"],
+                                new_feedback="helpful"
+                            )
                         st.session_state.messages[idx]["feedback_given"] = True
                         st.session_state.messages[idx]["feedback"] = "helpful"
                         st.success("Thanks for your feedback!")
                         st.rerun()
                 with col2:
                     if st.button("👎", key=f"not_helpful_{idx}"):
-                        # Log the question as needing improvement
+                        # Update not helpful feedback in CSV
                         if idx > 0:
                             user_msg = st.session_state.messages[idx - 1]
                             assistant_msg = message
                             logger = QuestionLogger()
-                            logger.log(
+                            logger.update_feedback(
                                 question=user_msg["content"],
                                 answer=assistant_msg["content"],
-                                sources=assistant_msg.get("source_docs", []),
-                                user_feedback="not_helpful",
-                                # auto_detected=False,
+                                new_feedback="not helpful"
                             )
                         st.session_state.messages[idx]["feedback_given"] = True
-                        st.session_state.messages[idx]["feedback"] = "not_helpful"
-                        st.warning(
-                            "Feedback logged. We'll improve this answer!")
+                        st.session_state.messages[idx]["feedback"] = "not helpful"
+                        st.warning("Feedback logged. We'll improve this answer!")
                         st.rerun()
             elif message["role"] == "assistant" and message.get("feedback_given", False):
                 feedback = message.get("feedback", "")
                 if feedback == "helpful":
                     st.caption("✓ Marked as helpful")
-                elif feedback == "not_helpful":
+                elif feedback == "not helpful":
                     st.caption("⚠️ Marked for improvement")
+                elif feedback == "Not Marked":
+                    st.caption("○ Not marked")
 
-            if "timestamp" in message:
-                st.caption(f"⏰ {message['timestamp']}")
+
+def log_unmarked_feedback():
+    """Log all previous assistant messages that haven't received feedback as 'Not Marked'."""
+    logger = QuestionLogger()
+    
+    # Find all assistant messages without feedback
+    for idx in range(len(st.session_state.messages)):
+        message = st.session_state.messages[idx]
+        
+        # Check if it's an assistant message without feedback
+        if message["role"] == "assistant" and not message.get("feedback_given", False):
+            # Find the corresponding user question (should be the message before)
+            if idx > 0:
+                user_msg = st.session_state.messages[idx - 1]
+                # Log as Not Marked
+                logger.log_feedback(
+                    question=user_msg["content"],
+                    answer=message["content"],
+                    feedback="Not Marked",
+                    sources=message.get("source_docs", [])
+                )
+                # Mark as feedback given so buttons disappear
+                st.session_state.messages[idx]["feedback_given"] = True
+                st.session_state.messages[idx]["feedback"] = "Not Marked"
 
 
 def format_sources(search_results):
@@ -341,13 +391,14 @@ def process_user_question(question: str):
     if not question:
         return
 
-    timestamp = datetime.now().strftime("%H:%M:%S")
+    # Log any unmarked feedback before processing new question
+    log_unmarked_feedback()
+
     st.session_state.messages.append(
-        {"role": "user", "content": question, "timestamp": timestamp})
+        {"role": "user", "content": question})
 
     with st.chat_message("user", avatar="👤"):
         st.markdown(question)
-        st.caption(f"⏰ {timestamp}")
 
     # Get assistant response
     with st.chat_message("assistant", avatar="🤖"):
@@ -385,17 +436,58 @@ def process_user_question(question: str):
                     with st.expander("📚 View Sources", expanded=False):
                         st.markdown(sources_md)
 
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                st.caption(f"⏰ {timestamp}")
-
+                # Add message to session state
+                message_idx = len(st.session_state.messages)
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": answer,
                     "sources": sources_md,
                     "source_docs": [s.get("file") for s in search_results],
-                    "timestamp": timestamp,
                     "feedback_given": False,
                 })
+                
+                # Log question immediately with Not Marked status
+                user_msg = st.session_state.messages[message_idx - 1]
+                logger = QuestionLogger()
+                logger.log_feedback(
+                    question=user_msg["content"],
+                    answer=answer,
+                    feedback="Not Marked",
+                    sources=[s.get("file") for s in search_results]
+                )
+
+                # Display feedback buttons for the new response
+                col1, col2, col3 = st.columns([1, 1, 8])
+                with col1:
+                    if st.button("👍", key=f"helpful_new_{message_idx}"):
+                        # Update helpful feedback in CSV
+                        user_msg = st.session_state.messages[message_idx - 1]
+                        assistant_msg = st.session_state.messages[message_idx]
+                        logger = QuestionLogger()
+                        logger.update_feedback(
+                            question=user_msg["content"],
+                            answer=assistant_msg["content"],
+                            new_feedback="helpful"
+                        )
+                        st.session_state.messages[message_idx]["feedback_given"] = True
+                        st.session_state.messages[message_idx]["feedback"] = "helpful"
+                        st.success("Thanks for your feedback!")
+                        st.rerun()
+                with col2:
+                    if st.button("👎", key=f"not_helpful_new_{message_idx}"):
+                        # Update not helpful feedback in CSV
+                        user_msg = st.session_state.messages[message_idx - 1]
+                        assistant_msg = st.session_state.messages[message_idx]
+                        logger = QuestionLogger()
+                        logger.update_feedback(
+                            question=user_msg["content"],
+                            answer=assistant_msg["content"],
+                            new_feedback="not helpful"
+                        )
+                        st.session_state.messages[message_idx]["feedback_given"] = True
+                        st.session_state.messages[message_idx]["feedback"] = "not helpful"
+                        st.warning("Feedback logged. We'll improve this answer!")
+                        st.rerun()
 
             except Exception as e:
                 st.error(f"❌ Error: {e}")
@@ -405,8 +497,8 @@ def render_review_dashboard():
     st.markdown(
         """
         <div class="header-container">
-            <h1 class="header-title">📋 Question Review Dashboard</h1>
-            <p class="header-subtitle">Review and manage questions that need docs improvement</p>
+            <h1 class="header-title">📋 Logged Questions & Feedback</h1>
+            <p class="header-subtitle">Review user feedback on questions and answers</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -418,10 +510,10 @@ def render_review_dashboard():
 
     st.divider()
     logger = QuestionLogger()
-    stats = logger.get_stats()
-    logs = logger.get_all_logs()
+    stats = logger.get_feedback_stats()
+    logs = logger.get_feedback_logs()
 
-    st.markdown("### 📊 Statistics")
+    st.markdown("### 📊 Feedback Statistics")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
@@ -433,96 +525,97 @@ def render_review_dashboard():
     with col2:
         st.markdown(f"""
             <div class="stat-card">
-                <div class="stat-value" style="color: #f59e0b;">{stats['pending']}</div>
-                <div class="stat-label">Pending Review</div>
+                <div class="stat-value" style="color: #10b981;">{stats['positive']}</div>
+                <div class="stat-label">Helpful</div>
             </div>
         """, unsafe_allow_html=True)
     with col3:
         st.markdown(f"""
             <div class="stat-card">
-                <div class="stat-value" style="color: #ef4444;">{stats['user_reported']}</div>
-                <div class="stat-label">User Reported</div>
+                <div class="stat-value" style="color: #ef4444;">{stats['negative']}</div>
+                <div class="stat-label">Not Helpful</div>
             </div>
         """, unsafe_allow_html=True)
     with col4:
         st.markdown(f"""
             <div class="stat-card">
-                <div class="stat-value" style="color: #10b981;">{stats['resolved']}</div>
-                <div class="stat-label">Resolved</div>
+                <div class="stat-value" style="color: #9ca3af;">{stats['not_marked']}</div>
+                <div class="stat-label">Not Marked</div>
             </div>
         """, unsafe_allow_html=True)
 
     st.divider()
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        if st.button("📥 Export to JSON", use_container_width=True):
-            logger.export_to_json()
-            st.success("Exported to unanswered_questions.json")
+    
+    if not logs:
+        st.info("No feedback logs found yet. Users need to mark responses as helpful or not helpful to see data here.")
+        st.divider()
+        return
 
-    st.markdown("### 🔍 Filter Questions")
-    filter_status = st.selectbox("Status", ["All", "Pending", "Resolved"])
-    # filter_type = st.selectbox("Type", ["All", "Auto-detected", "User Reported"])
+    st.markdown("### 🔍 Filter Feedback")
+    col1, col2 = st.columns(2)
+    with col1:
+        feedback_filter = st.selectbox("Filter by Feedback", ["All", "Helpful", "Not Helpful", "Not Marked"])
+    
+    
+    # CSV Download button
+    csv_content = logger.export_csv()
+    st.download_button(
+        label="📥 Export to CSV",
+        data=csv_content,
+        file_name=f"feedback_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        help="Download for SharePoint sync"
+    )
 
+    # Filter logs based on selection
     filtered_logs = logs
-    # if filter_status != "All":
-    #     filtered_logs = [l for l in filtered_logs if l.get("status", "").lower() == filter_status.lower()]
-    # if filter_type == "Auto-detected":
-    #     filtered_logs = [l for l in filtered_logs if bool(l.get("auto_detected"))]
-    # elif filter_type == "User Reported":
-    #     filtered_logs = [l for l in filtered_logs if l.get("user_feedback") == "not_helpful"]
+    if feedback_filter == "Helpful":
+        filtered_logs = [log for log in logs if log.get("Feedback", "").strip().lower() == "helpful"]
+    elif feedback_filter == "Not Helpful":
+        filtered_logs = [log for log in logs if log.get("Feedback", "").strip().lower() == "not helpful"]
+    elif feedback_filter == "Not Marked":
+        filtered_logs = [log for log in logs if log.get("Feedback", "").strip() == "Not Marked"]
 
     st.divider()
+    
     if not filtered_logs:
-        st.info("No questions found matching the filters.")
+        st.info(f"No feedback entries found for filter: {feedback_filter}")
     else:
-        st.markdown(f"### 📝 Questions ({len(filtered_logs)})")
+        st.markdown(f"### 📝 Feedback Entries ({len(filtered_logs)})")
+        feedback_emoji = ""
+        feedback_color = ""
         for idx, log in enumerate(reversed(filtered_logs)):
-            with st.expander(f"{'🔴' if log.get('user_feedback') == 'not_helpful' else '🟡'} {log['question'][:80]}...",
-                             expanded=False):
-                st.markdown(f"**❓ Question:** {log['question']}")
-                st.markdown(f"**🤖 Answer:** {log['answer']}")
-                if log.get('sources'):
-                    st.markdown("**📚 Sources:**")
-                    for source in log['sources']:
-                        st.markdown(f"- {source}")
-                else:
-                    st.warning("No sources found")
-
-                col1, col2, col3 = st.columns(3)
+            feedback_value = log.get("Feedback", "").strip()
+            if feedback_value.lower().strip() == "helpful":
+                feedback_emoji = "👍"
+                feedback_color = "#10b981"
+            elif feedback_value.lower().strip() == "not helpful":
+                feedback_emoji = "👎"
+                feedback_color = "#ef4444"
+            elif feedback_value.lower().strip() == "not marked":
+                feedback_emoji = "○"
+                feedback_color = "#9ca3af"
+            
+            with st.expander(f"{feedback_emoji} {log.get('Question', 'No question')[:80]}...", expanded=False):
+                st.markdown(f"**❓ Question:** {log.get('Question', 'N/A')}")
+                st.markdown(f"**🤖 Answer:** {log.get('Answer', 'N/A')}")
+                
+                col1, col2 = st.columns([1, 3])
                 with col1:
-                    st.caption(f"⏰ {log['timestamp'][:19]}")
+                    st.markdown(f"**📝 Feedback:** <span style='color: {feedback_color}; font-weight: bold;'>{log.get('Feedback', 'N/A')}</span>", unsafe_allow_html=True)
                 with col2:
-                    status_color = {"pending": "🟡", "resolved": "🟢"}
-                    st.caption(
-                        f"{status_color.get(log['status'], '⚪')} Status: {log['status']}")
-                with col3:
-                    if log.get('user_feedback') == 'not_helpful':
-                        st.caption("👎 User reported")
-
-                st.markdown("---")
-                st.markdown("**Update Status:**")
-                c1, c2, c3 = st.columns(3)
-                # with c1:
-                #     if st.button("Mark as Reviewed", key=f"review_{idx}"):
-                #         logger.update_status(log['timestamp'], "reviewed")
-                #         st.success("Marked as reviewed!")
-                #         st.rerun()
-                with c2:
-                    if st.button("Mark as Resolved", key=f"resolve_{idx}"):
-                        logger.update_status(log['timestamp'], "resolved")
-                        st.success("Marked as resolved!")
-                        st.rerun()
-                with c3:
-                    if st.button("Reset to Pending", key=f"pending_{idx}"):
-                        logger.update_status(log['timestamp'], "pending")
-                        st.success("Reset to pending!")
-                        st.rerun()
+                    if log.get('Sources'):
+                        st.markdown(f"**📚 Sources:** {log.get('Sources', 'N/A')}")
 
 
 def main():
     st.set_page_config(page_title="Gemma AI Assistant", page_icon="🤖",
                        layout="wide", initial_sidebar_state="expanded")
     apply_custom_css()
+    st.logo(
+        image="https://www.leaplogic.io/wp-content/themes/leaplogic/assets/images/logo-leaplogic-impetus.svg",
+        size="medium", # Options: "small", "medium", "large"
+        )
     initialize_session_state()
 
     # Initialize knowledge bases
