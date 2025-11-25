@@ -4,6 +4,7 @@ This file provides a Streamlit frontend that calls into the project's
 `GemmaRAGSystem` backend to answer user questions from the knowledge base.
 """
 import csv
+import json
 import os
 from datetime import datetime
 
@@ -41,28 +42,63 @@ def render_header():
     )
 
 
+LOG_FILE = "question_logs.json"
+
+
 class QuestionLogger:
-    """Question logger using session state memory only."""
+    """Question logger with persistent JSON storage."""
 
     def __init__(self):
-        self._init_session_storage()
-    
-    def _init_session_storage(self):
-        """Initialize session state storage for feedback logs."""
+        self.log_file = LOG_FILE
+        self._init_persistent_storage()
+
+    def _init_persistent_storage(self):
+        """Initialize persistent storage and load existing logs."""
+        # Load existing logs from file
+        if os.path.exists(self.log_file):
+            try:
+                with open(self.log_file, 'r', encoding='utf-8') as f:
+                    existing_logs = json.load(f)
+                print(f"✓ Loaded {len(existing_logs)} existing feedback logs from {self.log_file}")
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                print(f"⚠ Could not load existing logs: {e}. Starting fresh.")
+                existing_logs = []
+        else:
+            existing_logs = []
+
+        # Initialize session state with loaded logs
         if "feedback_logs" not in st.session_state:
-            st.session_state.feedback_logs = []
+            st.session_state.feedback_logs = existing_logs.copy()
+        else:
+            # Merge with existing session logs if any
+            session_logs = st.session_state.feedback_logs
+            # Avoid duplicates by checking timestamps
+            existing_timestamps = {log.get('Timestamp') for log in existing_logs}
+            new_session_logs = [log for log in session_logs if log.get('Timestamp') not in existing_timestamps]
+            if new_session_logs:
+                existing_logs.extend(new_session_logs)
+                st.session_state.feedback_logs = existing_logs.copy()
+                self._save_logs(existing_logs)
+
+    def _save_logs(self, logs):
+        """Save logs to persistent JSON file."""
+        try:
+            with open(self.log_file, 'w', encoding='utf-8') as f:
+                json.dump(logs, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"✗ Error saving logs to {self.log_file}: {e}")
 
     def log_feedback(self, question, answer, feedback, sources=None):
-        """Log user feedback to session state memory."""
-        self._log_feedback_memory(question, answer, feedback, sources)
+        """Log user feedback to persistent storage."""
+        self._log_feedback_persistent(question, answer, feedback, sources)
         if feedback not in ["Not Marked"]:
             st.toast("✅ Feedback logged!", icon="📝")
-    
-    def _log_feedback_memory(self, question, answer, feedback, sources=None):
-        """Log feedback to session state memory."""
+
+    def _log_feedback_persistent(self, question, answer, feedback, sources=None):
+        """Log feedback to persistent JSON file."""
         sources_str = "; ".join(sources) if sources else ""
         timestamp = datetime.now().isoformat()
-        
+
         log_entry = {
             "Question": question,
             "Answer": answer,
@@ -70,34 +106,59 @@ class QuestionLogger:
             "Sources": sources_str,
             "Timestamp": timestamp
         }
-        
+
+        # Add to session state
+        if "feedback_logs" not in st.session_state:
+            st.session_state.feedback_logs = []
         st.session_state.feedback_logs.append(log_entry)
+
+        # Save to persistent file
+        self._save_logs(st.session_state.feedback_logs)
     
     def get_feedback_logs(self):
-        """Get all feedback logs from memory."""
-        return st.session_state.get("feedback_logs", [])
+        """Get all feedback logs from persistent storage."""
+        if "feedback_logs" not in st.session_state:
+            return []
+        return st.session_state.feedback_logs
 
     def get_feedback_stats(self):
-        """Get statistics from session state feedback logs."""
+        """Get statistics from persistent feedback logs."""
         logs = self.get_feedback_logs()
         total = len(logs)
         positive = len([l for l in logs if l.get("Feedback", "").strip().lower() == "helpful"]) if total else 0
         negative = len([l for l in logs if l.get("Feedback", "").strip().lower() == "not helpful"]) if total else 0
         not_marked = len([l for l in logs if l.get("Feedback", "").strip() == "Not Marked"]) if total else 0
         return {"total": total, "positive": positive, "negative": negative, "not_marked": not_marked}
-    
+
     def get_storage_info(self):
         """Get information about the current storage backend."""
+        log_count = len(self.get_feedback_logs())
+        file_size = os.path.getsize(self.log_file) if os.path.exists(self.log_file) else 0
         return {
-            "type": "Session Memory",
-            "description": "Session-based memory storage (no persistence)"
+            "type": "Persistent JSON",
+            "file": self.log_file,
+            "total_logs": log_count,
+            "file_size_kb": round(file_size / 1024, 2),
+            "description": f"Persistent JSON storage ({log_count} logs, {round(file_size / 1024, 2)} KB)"
         }
-    
+
     def update_feedback(self, question, answer, new_feedback):
-        """Update feedback for an existing entry in session memory."""
+        """Update feedback for an existing entry in persistent storage."""
         logs = st.session_state.get("feedback_logs", [])
-        
-        # Update matching entry (find most recent match)
+
+        # Find and update matching entry (by question and answer)
+        for log in logs:
+            if (log.get("Question") == question and
+                log.get("Answer") == answer):
+                old_feedback = log.get("Feedback")
+                log["Feedback"] = new_feedback
+                log["Timestamp"] = datetime.now().isoformat()  # Update timestamp
+                print(f"✓ Updated feedback: '{old_feedback}' → '{new_feedback}'")
+                break
+
+        # Save updated logs
+        st.session_state.feedback_logs = logs
+        self._save_logs(logs)
         for i in range(len(logs) - 1, -1, -1):  # Start from end
             if logs[i]["Question"] == question and logs[i]["Answer"] == answer:
                 logs[i]["Feedback"] = new_feedback
