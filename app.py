@@ -59,73 +59,97 @@ def render_header():
 
 
 class QuestionLogger:
-    """Simple question logger using local CSV storage."""
+    """Question logger using session state memory only."""
 
-    def __init__(self, csv_file_path=CSV_LOG_FILE):
-        self.csv_file_path = csv_file_path
-        self._init_local_csv()
+    def __init__(self):
+        self._init_session_storage()
     
-    def _init_local_csv(self):
-        """Initialize local CSV file storage."""
-        csv_directory = os.path.dirname(self.csv_file_path)
-        if csv_directory and not os.path.exists(csv_directory):
-            os.makedirs(csv_directory, exist_ok=True)
-            
-        # Create CSV file with headers if missing
-        if not os.path.exists(self.csv_file_path):
-            with open(self.csv_file_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["question", "answer", "feedback", "sources", "timestamp"])
+    def _init_session_storage(self):
+        """Initialize session state storage for feedback logs."""
+        if "feedback_logs" not in st.session_state:
+            st.session_state.feedback_logs = []
 
     def log_feedback(self, question, answer, feedback, sources=None):
-        """Log user feedback to local CSV."""
-        self._log_feedback_local(question, answer, feedback, sources)
-        st.toast("✅ Feedback logged!", icon="📝")
+        """Log user feedback to session state memory."""
+        self._log_feedback_memory(question, answer, feedback, sources)
+        if feedback not in ["Not Marked"]:
+            st.toast("✅ Feedback logged!", icon="📝")
     
-    def _log_feedback_local(self, question, answer, feedback, sources=None):
-        """Log feedback to local CSV file."""
+    def _log_feedback_memory(self, question, answer, feedback, sources=None):
+        """Log feedback to session state memory."""
         sources_str = "; ".join(sources) if sources else ""
         timestamp = datetime.now().isoformat()
         
-        with open(self.csv_file_path, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([question, answer, feedback, sources_str, timestamp])
-    
-    def get_csv_feedback_logs(self):
-        """Get all feedback logs from local CSV."""
-        logs = []
-        if not os.path.exists(self.csv_file_path):
-            return logs
+        log_entry = {
+            "Question": question,
+            "Answer": answer,
+            "Feedback": feedback,
+            "Sources": sources_str,
+            "Timestamp": timestamp
+        }
         
-        with open(self.csv_file_path, "r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                logs.append(row)
-        return logs
+        st.session_state.feedback_logs.append(log_entry)
+    
+    def get_feedback_logs(self):
+        """Get all feedback logs from memory."""
+        return st.session_state.get("feedback_logs", [])
 
     def get_feedback_stats(self):
-        """Get statistics from CSV feedback logs."""
-        logs = self.get_csv_feedback_logs()
+        """Get statistics from session state feedback logs."""
+        logs = self.get_feedback_logs()
         total = len(logs)
         positive = len([l for l in logs if l.get("Feedback", "").strip().lower() == "helpful"]) if total else 0
         negative = len([l for l in logs if l.get("Feedback", "").strip().lower() == "not helpful"]) if total else 0
-        return {"total": total, "positive": positive, "negative": negative}
+        not_marked = len([l for l in logs if l.get("Feedback", "").strip() == "Not Marked"]) if total else 0
+        return {"total": total, "positive": positive, "negative": negative, "not_marked": not_marked}
     
     def get_storage_info(self):
         """Get information about the current storage backend."""
         return {
-            "type": "Local CSV",
-            "file": self.csv_file_path,
-            "description": "Local file system storage"
+            "type": "Session Memory",
+            "description": "Session-based memory storage (no persistence)"
         }
     
+    def update_feedback(self, question, answer, new_feedback):
+        """Update feedback for an existing entry in session memory."""
+        logs = st.session_state.get("feedback_logs", [])
+        
+        # Update matching entry (find most recent match)
+        for i in range(len(logs) - 1, -1, -1):  # Start from end
+            if logs[i]["Question"] == question and logs[i]["Answer"] == answer:
+                logs[i]["Feedback"] = new_feedback
+                break
+    
+    def clear_all_logs(self):
+        """Clear all feedback logs from session memory."""
+        st.session_state.feedback_logs = []
+    
     def export_csv(self):
-        """Export CSV data for download."""
-        try:
-            with open(self.csv_file_path, "r", encoding="utf-8") as f:
-                return f.read()
-        except FileNotFoundError:
-            return "question,answer,feedback,sources,timestamp\n"  # Empty CSV with headers
+        """Generate and export CSV data for download."""
+        logs = self.get_feedback_logs()
+        
+        if not logs:
+            return "Question,Answer,Feedback,Sources,Timestamp\n"  # Empty CSV with headers
+        
+        # Generate CSV content
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(["Question", "Answer", "Feedback", "Sources", "Timestamp"])
+        
+        # Write data rows
+        for log in logs:
+            writer.writerow([
+                log.get("Question", ""),
+                log.get("Answer", ""),
+                log.get("Feedback", ""),
+                log.get("Sources", ""),
+                log.get("Timestamp", "")
+            ])
+        
+        return output.getvalue()
 
 
 def render_sidebar(system):
@@ -150,18 +174,6 @@ def render_sidebar(system):
                 </div>
             """, unsafe_allow_html=True)
         
-        # Show storage backend info
-        logger = QuestionLogger()
-        storage_info = logger.get_storage_info()
-        
-        with col2:
-            st.markdown(f"""
-                <div class="stat-card">
-                    <div class="stat-value">📁</div>
-                    <div class="stat-label">Storage</div>
-                    <div style="font-size: 0.8rem; color: #374151;">{storage_info["type"]}</div>
-                </div>
-            """, unsafe_allow_html=True)
         st.divider()
 
         if st.session_state.get("db_loaded", False):
@@ -180,6 +192,12 @@ def render_sidebar(system):
         if st.button("🗑️ Clear Chat History", use_container_width=True):
             st.session_state.messages = []
             st.success("Chat history cleared!")
+            st.rerun()
+        
+        if st.button("🧹 Clear All Feedback Logs", use_container_width=True):
+            logger = QuestionLogger()
+            logger.clear_all_logs()
+            st.success("All feedback logs cleared!")
             st.rerun()
 
         if st.button("🔄 Reload Database", use_container_width=True):
@@ -299,16 +317,15 @@ def display_chat_history():
                 col1, col2, col3 = st.columns([1, 1, 8])
                 with col1:
                     if st.button("👍", key=f"helpful_{idx}"):
-                        # Log helpful feedback to CSV
+                        # Update helpful feedback in CSV
                         if idx > 0:
                             user_msg = st.session_state.messages[idx - 1]
                             assistant_msg = message
                             logger = QuestionLogger()
-                            logger.log_feedback(
+                            logger.update_feedback(
                                 question=user_msg["content"],
                                 answer=assistant_msg["content"],
-                                feedback="helpful",
-                                sources=assistant_msg.get("source_docs", [])
+                                new_feedback="helpful"
                             )
                         st.session_state.messages[idx]["feedback_given"] = True
                         st.session_state.messages[idx]["feedback"] = "helpful"
@@ -316,16 +333,15 @@ def display_chat_history():
                         st.rerun()
                 with col2:
                     if st.button("👎", key=f"not_helpful_{idx}"):
-                        # Log not helpful feedback to CSV
+                        # Update not helpful feedback in CSV
                         if idx > 0:
                             user_msg = st.session_state.messages[idx - 1]
                             assistant_msg = message
                             logger = QuestionLogger()
-                            logger.log_feedback(
+                            logger.update_feedback(
                                 question=user_msg["content"],
                                 answer=assistant_msg["content"],
-                                feedback="not helpful",
-                                sources=assistant_msg.get("source_docs", [])
+                                new_feedback="not helpful"
                             )
                         st.session_state.messages[idx]["feedback_given"] = True
                         st.session_state.messages[idx]["feedback"] = "not helpful"
@@ -337,6 +353,33 @@ def display_chat_history():
                     st.caption("✓ Marked as helpful")
                 elif feedback == "not helpful":
                     st.caption("⚠️ Marked for improvement")
+                elif feedback == "Not Marked":
+                    st.caption("○ Not marked")
+
+
+def log_unmarked_feedback():
+    """Log all previous assistant messages that haven't received feedback as 'Not Marked'."""
+    logger = QuestionLogger()
+    
+    # Find all assistant messages without feedback
+    for idx in range(len(st.session_state.messages)):
+        message = st.session_state.messages[idx]
+        
+        # Check if it's an assistant message without feedback
+        if message["role"] == "assistant" and not message.get("feedback_given", False):
+            # Find the corresponding user question (should be the message before)
+            if idx > 0:
+                user_msg = st.session_state.messages[idx - 1]
+                # Log as Not Marked
+                logger.log_feedback(
+                    question=user_msg["content"],
+                    answer=message["content"],
+                    feedback="Not Marked",
+                    sources=message.get("source_docs", [])
+                )
+                # Mark as feedback given so buttons disappear
+                st.session_state.messages[idx]["feedback_given"] = True
+                st.session_state.messages[idx]["feedback"] = "Not Marked"
 
 
 def format_sources(search_results):
@@ -354,6 +397,9 @@ def format_sources(search_results):
 def process_user_question(question: str):
     if not question:
         return
+
+    # Log any unmarked feedback before processing new question
+    log_unmarked_feedback()
 
     st.session_state.messages.append(
         {"role": "user", "content": question})
@@ -386,20 +432,29 @@ def process_user_question(question: str):
                     "source_docs": [s.get("file") for s in search_results],
                     "feedback_given": False,
                 })
+                
+                # Log question immediately with Not Marked status
+                user_msg = st.session_state.messages[message_idx - 1]
+                logger = QuestionLogger()
+                logger.log_feedback(
+                    question=user_msg["content"],
+                    answer=answer,
+                    feedback="Not Marked",
+                    sources=[s.get("file") for s in search_results]
+                )
 
                 # Display feedback buttons for the new response
                 col1, col2, col3 = st.columns([1, 1, 8])
                 with col1:
                     if st.button("👍", key=f"helpful_new_{message_idx}"):
-                        # Log helpful feedback to CSV
+                        # Update helpful feedback in CSV
                         user_msg = st.session_state.messages[message_idx - 1]
                         assistant_msg = st.session_state.messages[message_idx]
                         logger = QuestionLogger()
-                        logger.log_feedback(
+                        logger.update_feedback(
                             question=user_msg["content"],
                             answer=assistant_msg["content"],
-                            feedback="helpful",
-                            sources=assistant_msg.get("source_docs", [])
+                            new_feedback="helpful"
                         )
                         st.session_state.messages[message_idx]["feedback_given"] = True
                         st.session_state.messages[message_idx]["feedback"] = "helpful"
@@ -407,15 +462,14 @@ def process_user_question(question: str):
                         st.rerun()
                 with col2:
                     if st.button("👎", key=f"not_helpful_new_{message_idx}"):
-                        # Log not helpful feedback to CSV
+                        # Update not helpful feedback in CSV
                         user_msg = st.session_state.messages[message_idx - 1]
                         assistant_msg = st.session_state.messages[message_idx]
                         logger = QuestionLogger()
-                        logger.log_feedback(
+                        logger.update_feedback(
                             question=user_msg["content"],
                             answer=assistant_msg["content"],
-                            feedback="not helpful",
-                            sources=assistant_msg.get("source_docs", [])
+                            new_feedback="not helpful"
                         )
                         st.session_state.messages[message_idx]["feedback_given"] = True
                         st.session_state.messages[message_idx]["feedback"] = "not helpful"
@@ -444,22 +498,22 @@ def render_review_dashboard():
     st.divider()
     logger = QuestionLogger()
     stats = logger.get_feedback_stats()
-    logs = logger.get_csv_feedback_logs()
+    logs = logger.get_feedback_logs()
 
     st.markdown("### 📊 Feedback Statistics")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown(f"""
             <div class="stat-card">
                 <div class="stat-value">{stats['total']}</div>
-                <div class="stat-label">Total Feedback</div>
+                <div class="stat-label">Total Questions</div>
             </div>
         """, unsafe_allow_html=True)
     with col2:
         st.markdown(f"""
             <div class="stat-card">
                 <div class="stat-value" style="color: #10b981;">{stats['positive']}</div>
-                <div class="stat-label">Helpful Responses</div>
+                <div class="stat-label">Helpful</div>
             </div>
         """, unsafe_allow_html=True)
     with col3:
@@ -469,44 +523,36 @@ def render_review_dashboard():
                 <div class="stat-label">Not Helpful</div>
             </div>
         """, unsafe_allow_html=True)
+    with col4:
+        st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value" style="color: #9ca3af;">{stats['not_marked']}</div>
+                <div class="stat-label">Not Marked</div>
+            </div>
+        """, unsafe_allow_html=True)
 
     st.divider()
     
     if not logs:
         st.info("No feedback logs found yet. Users need to mark responses as helpful or not helpful to see data here.")
+        st.divider()
         return
 
-    # Add storage info and download options
-    storage_info = logger.get_storage_info()
-    col1, col2, col3 = st.columns([2, 2, 1])
-    
-    with col1:
-        st.markdown(f"**💾 Storage:** {storage_info['type']}")
-        if storage_info['type'] == 'SharePoint Excel':
-            st.markdown(f"[📊 Open SharePoint Excel]({storage_info['url']})")
-    
-    with col2:
-        st.markdown(f"**📊 Total Entries:** {len(logs)}")
-        if storage_info.get('local_backup'):
-            st.caption(f"Local backup: {storage_info['local_backup']}")
-    
-    with col3:
-        # CSV Download button
-        csv_content = logger.export_csv()
-        st.download_button(
-            label="📥 CSV",
-            data=csv_content,
-            file_name=f"feedback_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            help="Download for SharePoint sync"
-        )
-
-    st.divider()
     st.markdown("### 🔍 Filter Feedback")
     col1, col2 = st.columns(2)
     with col1:
-        feedback_filter = st.selectbox("Filter by Feedback", ["All", "Helpful", "Not Helpful"])
-
+        feedback_filter = st.selectbox("Filter by Feedback", ["All", "Helpful", "Not Helpful", "Not Marked"])
+    
+    
+    # CSV Download button
+    csv_content = logger.export_csv()
+    st.download_button(
+        label="📥 Export to CSV",
+        data=csv_content,
+        file_name=f"feedback_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        help="Download for SharePoint sync"
+    )
 
     # Filter logs based on selection
     filtered_logs = logs
@@ -514,6 +560,8 @@ def render_review_dashboard():
         filtered_logs = [log for log in logs if log.get("Feedback", "").strip().lower() == "helpful"]
     elif feedback_filter == "Not Helpful":
         filtered_logs = [log for log in logs if log.get("Feedback", "").strip().lower() == "not helpful"]
+    elif feedback_filter == "Not Marked":
+        filtered_logs = [log for log in logs if log.get("Feedback", "").strip() == "Not Marked"]
 
     st.divider()
     
@@ -521,10 +569,19 @@ def render_review_dashboard():
         st.info(f"No feedback entries found for filter: {feedback_filter}")
     else:
         st.markdown(f"### 📝 Feedback Entries ({len(filtered_logs)})")
-        
+        feedback_emoji = ""
+        feedback_color = ""
         for idx, log in enumerate(reversed(filtered_logs)):
-            feedback_emoji = "👍" if log.get("Feedback", "").strip().lower() == "helpful" else "👎" if log.get("Feedback", "").strip().lower() == "not helpful" else "🔄"
-            feedback_color = "#10b981" if log.get("Feedback", "").strip().lower() == "helpful" else "#ef4444"
+            feedback_value = log.get("Feedback", "").strip()
+            if feedback_value.lower().strip() == "helpful":
+                feedback_emoji = "👍"
+                feedback_color = "#10b981"
+            elif feedback_value.lower().strip() == "not helpful":
+                feedback_emoji = "👎"
+                feedback_color = "#ef4444"
+            elif feedback_value.lower().strip() == "not marked":
+                feedback_emoji = "○"
+                feedback_color = "#9ca3af"
             
             with st.expander(f"{feedback_emoji} {log.get('Question', 'No question')[:80]}...", expanded=False):
                 st.markdown(f"**❓ Question:** {log.get('Question', 'N/A')}")
