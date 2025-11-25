@@ -32,8 +32,8 @@ def render_header():
     st.markdown(
         """
         <div class="header-container">
-            <h1 class="header-title">Gemma — Documentation Assistant</h1>
-            <p class="header-subtitle">Ask questions against your docs (RAG)</p>
+            <h1 class="header-title">Leaplogic — Documentation Assistant</h1>
+            <p class="header-subtitle">Ask questions against your queries</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -118,11 +118,11 @@ class QuestionLogger:
 
 def render_sidebar(system):
     with st.sidebar:
-        st.markdown("### � About")
+        st.markdown("### ℹ️ About")
         st.markdown("""
             <div class="info-box">
-            <b>Gemma Documentation Assistant</b><br>
-            Ask questions and get answers based on indexed docs.
+            <b>Leaplogic Documentation Assistant</b><br>
+            Ask questions and get answers on leaplogic and common framework (wm-python).
             </div>
         """, unsafe_allow_html=True)
 
@@ -134,7 +134,7 @@ def render_sidebar(system):
                 <div class="stat-card">
                     <div class="stat-value">🤖</div>
                     <div class="stat-label">Model</div>
-                    <div style="font-size: 0.8rem; color: #374151;">{config.GEMMA_MODEL}</div>
+                    <div style="font-size: 0.8rem; color: #D57F00;">{config.GEMMA_MODEL}</div>
                 </div>
             """, unsafe_allow_html=True)
         st.divider()
@@ -152,12 +152,12 @@ def render_sidebar(system):
 
         st.divider()
         st.markdown("### 🔧 Actions")
-        if st.button("🗑️ Clear Chat History", use_container_width=True):
+        if st.button("🗑️ Clear Chat History", use_container_width=True, key="clear_chat_button"):
             st.session_state.messages = []
             st.success("Chat history cleared!")
             st.rerun()
 
-        if st.button("🔄 Reload Database", use_container_width=True):
+        if st.button("🔄 Reload Database", use_container_width=True, key="clear_reload_button"):
             with st.spinner("Reloading vector database..."):
                 try:
                     # Reload KB without overwriting existing
@@ -166,7 +166,7 @@ def render_sidebar(system):
                 except Exception as e:
                     st.error(f"Failed to reload database: {e}")
 
-        if st.button("📋 View Logged Questions", use_container_width=True):
+        if st.button("📋 View Logged Questions", use_container_width=True, key="view_logged_questions_button"):
             st.session_state.show_review_dashboard = True
             st.rerun()
 
@@ -219,7 +219,7 @@ def display_welcome_message():
     st.markdown(
         """
         <div style="text-align: center; padding: 3rem 0;">
-            <h2 style="color: #667eea;">👋 Welcome!</h2>
+            <h2 style="color: black;">👋 Welcome!</h2>
             <p style="font-size: 1.1rem; color: #6b7280; margin-top: 1rem;">I'm your AI assistant, ready to help you understand and use the docs.</p>
             <p style="color: #9ca3af; margin-top: 0.5rem;">Ask me anything about the docs below ⬇️</p>
         </div>
