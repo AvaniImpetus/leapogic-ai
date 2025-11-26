@@ -2,7 +2,7 @@
 # SEMANTIC SEARCH & RETRIEVAL
 # ==============================
 import sqlite3
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 
@@ -18,7 +18,7 @@ class SemanticSearcher:
         self.embedding_manager = embedding_manager
         self.db_file = db_file or config.VECTOR_DB_FILE
 
-    def search(self, query: str, top_k: int = config.TOP_K_RETRIEVAL, file_filter: str = None) -> List[Tuple[str, str, float]]:
+    def search(self, query: str, top_k: int = config.TOP_K_RETRIEVAL, file_filter: Union[str, List[str]] = None) -> List[Tuple[str, str, float]]:
         """
         Search for relevant chunks using semantic similarity
         Returns list of (chunk_content, file_name, similarity_score)
@@ -83,8 +83,12 @@ class SemanticSearcher:
 
         # Filter by file_filter if provided
         if file_filter:
-            unique_similarities = [
-                item for item in unique_similarities if item[1] == file_filter]
+            if isinstance(file_filter, list):
+                unique_similarities = [
+                    item for item in unique_similarities if item[1] in file_filter]
+            else:
+                unique_similarities = [
+                    item for item in unique_similarities if item[1] == file_filter]
             if len(unique_similarities) < top_k:
                 top_k = len(unique_similarities)
 
