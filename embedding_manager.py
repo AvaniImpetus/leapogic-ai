@@ -53,10 +53,24 @@ class EmbeddingManager:
                 ["test"], convert_to_numpy=True)
             self.embedding_dim = sample_embedding.shape[1]
             print(
-                f"✓ Embedding model loaded (dimension: {self.embedding_dim})")
+                f"✓ Embedding model loaded (dimension: {self.embedding_dim}) on device: {config.DEVICE}")
         except Exception as e:
-            print(f"✗ Error loading embedding model: {e}")
-            raise
+            print(f"✗ Error loading embedding model on {config.DEVICE}: {e}")
+            # Try fallback to CPU if CUDA failed
+            if config.DEVICE == "cuda":
+                print("🔄 Falling back to CPU...")
+                try:
+                    self.embedder = SentenceTransformer(
+                        config.EMBEDDING_MODEL, device="cpu")
+                    sample_embedding = self.embedder.encode(
+                        ["test"], convert_to_numpy=True)
+                    self.embedding_dim = sample_embedding.shape[1]
+                    print(f"✓ Embedding model loaded (dimension: {self.embedding_dim}) on CPU fallback")
+                except Exception as e2:
+                    print(f"✗ CPU fallback also failed: {e2}")
+                    raise e2
+            else:
+                raise
 
     def encode(self, texts: List[str]) -> np.ndarray:
         """Encode texts to embeddings"""
