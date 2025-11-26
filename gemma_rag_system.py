@@ -8,6 +8,7 @@ from semantic_search import SemanticSearcher
 from ingest_docs import DocumentIngestion
 from embedding_manager import EmbeddingManager
 import config
+from typing import Union, List
 import google.generativeai as genai
 import ssl
 import sqlite3
@@ -102,7 +103,7 @@ class GemmaRAGSystem:
         """Reload knowledge base without overwriting existing entries"""
         self.load_knowledge_base(overwrite_existing=False)
 
-    def answer_question(self, question: str, file_filter: str = None) -> dict:
+    def answer_question(self, question: str, file_filter: Union[str, List[str]] = None) -> dict:
         """
         Answer a user question using the RAG pipeline
         Returns dict with answer, sources, and metadata

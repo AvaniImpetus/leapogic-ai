@@ -238,7 +238,7 @@ LeapLogic applies intelligent transformation rules to ensure migrated code maint
 
 ### QUALIFY Clause Conversion
 
-**How LeapLogic Handles It:** Since Redshift doesn't support the QUALIFY clause in certain contexts, LeapLogic automatically creates a subquery (named `DerivedTable`) and moves the qualify condition to a WHERE clause in the outer query.
+**How LeapLogic Handles It:** Redshift supports the QUALIFY clause, hence no conversion is required for qualify clause.
 
 ### Casting Application
 
@@ -287,6 +287,91 @@ LeapLogic applies intelligent transformation rules to ensure migrated code maint
 **Example:** `CREATE VIEW view1 AS SELECT * FROM tbl;`
 
 LeapLogic documents these simple views for review and potential optimization.
+
+### Index Conversion
+
+**How LeapLogic Handles It:** LeapLogic converts Teradata indexes to appropriate Redshift equivalents based on their type and usage.
+
+**Unique Primary Index → UNIQUE**
+
+LeapLogic converts Teradata's Unique Primary Index to Redshift's UNIQUE constraint. This ensures data integrity by preventing duplicate values in the specified columns.
+
+**Teradata Input:**
+
+```sql
+CREATE TABLE customers (
+    customer_id INTEGER,
+    email VARCHAR(100),
+    UNIQUE PRIMARY INDEX (customer_id, email)
+);
+```
+
+**LeapLogic Converts to Redshift:**
+
+```sql
+CREATE TABLE customers (
+    customer_id INTEGER,
+    email VARCHAR(100),
+    UNIQUE (customer_id, email)
+);
+```
+
+**Primary Index → Sort Key (when partition clause present)**
+
+LeapLogic removes Primary Index declarations unless they include a partition clause. When a partition clause is present, LeapLogic converts the Primary Index to a Sort Key for optimal query performance in Redshift's columnar storage.
+
+**Teradata Input (without partition):**
+
+```sql
+CREATE TABLE orders (
+    order_id INTEGER,
+    customer_id INTEGER,
+    order_date DATE,
+    PRIMARY INDEX (order_id)
+);
+```
+
+**LeapLogic Converts to Redshift:**
+
+```sql
+CREATE TABLE orders (
+    order_id INTEGER,
+    customer_id INTEGER,
+    order_date DATE
+);
+-- Primary Index removed as no partition clause
+```
+
+**Teradata Input (with partition):**
+
+```sql
+CREATE TABLE sales (
+    sale_id INTEGER,
+    product_id INTEGER,
+    sale_date DATE,
+    amount DECIMAL(10,2),
+    PRIMARY INDEX (sale_id) PARTITION BY RANGE(sale_date) (
+        START ('2020-01-01') END ('2026-01-01') EVERY INTERVAL '1' MONTH
+    )
+);
+```
+
+**LeapLogic Converts to Redshift:**
+
+```sql
+CREATE TABLE sales (
+    sale_id INTEGER,
+    product_id INTEGER,
+    sale_date DATE,
+    amount DECIMAL(10,2)
+)
+SORTKEY (sale_id);
+-- Primary Index converted to Sort Key due to partition clause
+```
+
+### Logging in Stored Procedures
+
+**How LeapLogic Handles It:** LeapLogic implements comprehensive logging in converted Redshift stored procedures using the RAISE statement. These logs provide critical information about procedure execution, including the procedure name, affected table name, type of query, and status. This ensures proper audit trails and debugging capabilities in the migrated code.
 
 ---
 
@@ -560,6 +645,94 @@ SELECT log_entry,
 FROM system_logs;
 ```
 
+#### ~~* → ILIKE
+
+**What the operator does:** Performs case-insensitive pattern matching using wildcards.
+
+**How LeapLogic converts it:** LeapLogic transforms the `~~*` operator to Redshift's `ILIKE` operator.
+
+**Teradata Input:**
+
+```sql
+SELECT customer_name
+FROM customers
+WHERE customer_name ~~* 'john%';
+```
+
+**LeapLogic Converts to:**
+
+```sql
+SELECT customer_name
+FROM customers
+WHERE customer_name ILIKE 'john%';
+```
+
+#### !~~ → NOT LIKE
+
+**What the operator does:** Performs case-sensitive pattern matching negation.
+
+**How LeapLogic converts it:** LeapLogic transforms the `!~~` operator to Redshift's `NOT LIKE` operator.
+
+**Teradata Input:**
+
+```sql
+SELECT product_name
+FROM products
+WHERE product_name !~~ 'temp%';
+```
+
+**LeapLogic Converts to:**
+
+```sql
+SELECT product_name
+FROM products
+WHERE product_name NOT LIKE 'temp%';
+```
+
+#### ~~ → LIKE
+
+**What the operator does:** Performs case-sensitive pattern matching using wildcards.
+
+**How LeapLogic converts it:** LeapLogic transforms the `~~` operator to Redshift's `LIKE` operator.
+
+**Teradata Input:**
+
+```sql
+SELECT email
+FROM users
+WHERE email ~~ '%@company.com';
+```
+
+**LeapLogic Converts to:**
+
+```sql
+SELECT email
+FROM users
+WHERE email LIKE '%@company.com';
+```
+
+#### !~~* → NOT ILIKE
+
+**What the operator does:** Performs case-insensitive pattern matching negation.
+
+**How LeapLogic converts it:** LeapLogic transforms the `!~~*` operator to Redshift's `NOT ILIKE` operator.
+
+**Teradata Input:**
+
+```sql
+SELECT department
+FROM employees
+WHERE department !~~* 'sales%';
+```
+
+**LeapLogic Converts to:**
+
+```sql
+SELECT department
+FROM employees
+WHERE department NOT ILIKE 'sales%';
+```
+
 ### Date and Time Functions
 
 #### GETUTCDATE → convert_timezone('UTC', getdate())
@@ -602,6 +775,26 @@ WHERE session_id = 'abc123';
 UPDATE sessions
 SET last_activity = CURRENT_TIMESTAMP
 WHERE session_id = 'abc123';
+```
+
+#### FORMAT → TO_CHAR
+
+**What the function does:** Formats date, time, or numeric values into a specified string format.
+
+**How LeapLogic converts it:** LeapLogic transforms the FORMAT function to Redshift's TO_CHAR function with the same format string.
+
+**Teradata Input:**
+
+```sql
+SELECT order_date FORMAT 'dd/mm/yyyy' AS formatted_date
+FROM orders;
+```
+
+**LeapLogic Converts to:**
+
+```sql
+SELECT TO_CHAR(order_date, 'dd/mm/yyyy') AS formatted_date
+FROM orders;
 ```
 
 ### Random Number Functions
@@ -686,4 +879,4 @@ FROM customers;
 ---
 
 _Generated by LeapLogic - Automated Database Migration Platform_  
-_Last Updated: November 18, 2025_
+_Last Updated: November 26, 2025_

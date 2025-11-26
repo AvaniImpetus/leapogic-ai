@@ -541,25 +541,6 @@ LeapLogic simplifies complex Teradata identity specifications into concise PySpa
 
 This approach provides environment-agnostic code and supports complex multi-database architectures in AWS Glue.
 
-### Generated Reports and Outputs
-
-**How LeapLogic Handles It:** LeapLogic generates comprehensive reports and consolidated outputs during the conversion process to provide visibility into the migration and ensure quality assurance.
-
-**Validation Report for Tables:**
-LeapLogic generates detailed validation reports for each table that includes:
-
-- **Column Names**: Complete list of all columns in the table
-- **Data Types**: Original Teradata data types and their Iceberg-compatible conversions
-- **Constraints**: NOT NULL constraints, primary keys, foreign keys, and other table constraints with their Iceberg-compatible equivalents
-
-This validation report helps developers verify that the schema conversion is accurate and that all data types and constraints are properly migrated to Iceberg-compatible formats.
-
-**Schema Consolidation Output:**
-LeapLogic produces consolidated outputs organized at the schema level. The consolidated output contains:
-
-- **Schema-level Grouping**: All tables and views belonging to the same schema are converted and grouped together in a single file
-- **Organized Structure**: Instead of individual files for each object, the conversion of all tables/views of the same schema is consolidated, making it easier to manage and deploy
-
 ### Cross-Platform Query Conversion Strategy (Iceberg & Redshift)
 
 **How LeapLogic Handles It:** LeapLogic determines the optimal conversion strategy based on the location of target and source tables across different platforms (Iceberg and Redshift). The conversion approach varies depending on where the data resides and where it needs to be processed.
