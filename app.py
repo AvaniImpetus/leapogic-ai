@@ -293,14 +293,14 @@ def display_welcome_message():
     if is_leaplogic:
         # Leaplogic questions
         with col1:
-            if st.button("🔄 How does LeapLogic convert the QUALIFY clause?", use_container_width=True, disabled=st.session_state.processing):
+            if st.button("🔄 How does LeapLogic convert ZEROIFNULL function?", use_container_width=True, disabled=st.session_state.processing):
                 process_user_question(
-                    "How does LeapLogic convert the QUALIFY clause from Teradata to PySpark?")
+                    "How is zeroifnull function converted in Pyspark?")
                 st.rerun()
         with col2:
-            if st.button("🔤 How are Delete Queries converted?", use_container_width=True, disabled=st.session_state.processing):
+            if st.button("🔤 Why is derivedTable subquery created?", use_container_width=True, disabled=st.session_state.processing):
                 process_user_question(
-                    "How are Delete Queries converted in LeapLogic?")
+                    "Why is derivedTable subquery created?")
                 st.rerun()
 
     else:
