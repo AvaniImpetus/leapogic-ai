@@ -39,20 +39,21 @@ aws_secret_access_key=None, aws_session_token=None)
 
 Purpose:
 
-- Receive messages from an SQS queue, parse each message body as JSON when possible, and return a normalized list of
-  messages. Optionally deletes messages after reading.
+- Receive messages from an SQS queue, parse each message body as JSON when possible, and return a normalized list of messages. Optionally deletes messages after reading.
 
 Args:
 
-- executor: object — Glue executor context
-- queue_url (str): URL of the SQS queue
-- region (str): AWS region (optional)
-- max_messages (int): Max messages to fetch (1-10). Values outside are clamped to [1,10].
-- wait_time (int): Long-poll wait time in seconds (0-20). Values outside are clamped.
-- visibility_timeout (int): Visibility timeout to apply when receiving (seconds)
-- message_attributes (list): List of attribute names to request (None means 'All')
-- delete_after_read (bool): If True, delete messages from the queue after reading
-- aws_access_key_id, aws_secret_access_key, aws_session_token: optional explicit credentials
+        executor: Glue executor context (for logging compatibility)
+        queue_url (str): The URL of the SQS queue
+        region (str): AWS region name (default: None, uses default region)
+        max_messages (int): Maximum number of messages to receive (1-10, default: 1)
+        wait_time (int): Long polling wait time in seconds (0-20, default: 0)
+        visibility_timeout (int): Message visibility timeout in seconds (default: None)
+        message_attributes (list): List of message attribute names to retrieve (default: None for all)
+        delete_after_read (bool): Whether to delete messages after reading (default: False)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
 
 Returns: dict — shape example:
 
@@ -79,8 +80,8 @@ Returns: dict — shape example:
 
 Raises:
 
-- botocore.exceptions.ClientError: If SQS returns an error (caught and returned in result)
-- botocore.exceptions.NoCredentialsError: If AWS credentials cannot be found (caught and returned)
+		NoCredentialsError: If AWS credentials are not available
+        ClientError: If there's an error creating the client
 
 Example:
 
@@ -113,18 +114,20 @@ Purpose:
 
 Args:
 
-- executor: object — Glue executor context
-- queue_url (str): URL of the SQS queue
-- message_body (str|dict): Message payload; dicts are JSON-encoded
-- region (str): AWS region (optional)
-- delay_seconds (int): Delay before message becomes visible (0-900)
-- message_attributes (dict): Attributes mapping name -> value (helper converts to SQS format)
-- message_group_id (str): FIFO queue group id (optional)
-- message_deduplication_id (str): FIFO dedupe id (optional)
-- aws_access_key_id, aws_secret_access_key, aws_session_token: optional explicit credentials
+        executor: Glue executor context (for logging compatibility)
+        queue_url (str): The URL of the SQS queue
+        message_body (str or dict): The message body (will be JSON-encoded if dict)
+        region (str): AWS region name (default: None, uses default region)
+        delay_seconds (int): Delay before message becomes available (0-900, default: 0)
+        message_attributes (dict): Message attributes to include (default: None)
+        message_group_id (str): Message group ID for FIFO queues (default: None)
+        message_deduplication_id (str): Message deduplication ID for FIFO queues (default: None)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
 
 Returns:
-dict — shape example:
+ dict: Response containing message ID and metadata
 
 ```
     {
@@ -140,8 +143,8 @@ dict — shape example:
 
 Raises:
 
-- ClientError: If SQS send fails (caught and returned)
-- NoCredentialsError: If credentials missing (caught and returned)
+      ClientError: If AWS service returns an error
+       NoCredentialsError: If AWS credentials are not available
 
 Example:
 
@@ -153,7 +156,8 @@ Notes:
 
 - `message_attributes` accepts Python primitives and will convert them into SQS `MessageAttributes` values with
   appropriate DataType.
-- For binary attributes, pass a `bytes` value — it will be sent as `BinaryValue`.
+- For binary attributes, pass a `bytes` value — it will be sent as `Binary`.
+-For float attributes, pass a `float` value - it will be sent as `Number`.
 - For non-string, non-numeric values the helper JSON-encodes them and sends as a string attribute.
 
 ---
@@ -169,14 +173,16 @@ Purpose:
 
 Args:
 
-- executor: object — Glue executor context
-- queue_url (str): URL of the queue
-- region (str): AWS region (optional)
-- attribute_names (list): Specific attribute names to fetch (defaults to ['All'])
-- aws_access_key_id, aws_secret_access_key, aws_session_token: optional credentials
+        executor: Glue executor context (for logging compatibility)
+        queue_url (str): The URL of the SQS queue
+        region (str): AWS region name (default: None, uses default region)
+        attribute_names (list): List of attribute names to retrieve (default: None for all)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
 
 Returns:
-dict — example:
+dict — Queue attributes and metadata:
 
 ```
     {
@@ -190,8 +196,8 @@ dict — example:
 
 Raises:
 
-- ClientError: If SQS returns an error (caught and returned)
-- NoCredentialsError: If credentials missing (caught and returned)
+        ClientError: If AWS service returns an error
+        NoCredentialsError: If AWS credentials are not available
 
 Example:
 
@@ -220,16 +226,18 @@ Purpose:
 
 Args:
 
-- executor: object — Glue executor context
-- region (str): AWS region (optional)
-- queue_name_prefix (str): Filter queues by name prefix (optional)
-- max_results (int): Maximum number of results (clamped to 1000)
-- aws_access_key_id, aws_secret_access_key, aws_session_token: optional credentials
+        executor: Glue executor context (for logging compatibility)
+        region (str): AWS region name (default: None, uses default region)
+        queue_name_prefix (str): Prefix to filter queue names (default: None)
+        max_results (int): Maximum number of queues to return (default: 1000)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
 
 Returns:
 
 ```
-    dict — example:
+    dict — List of queue URLs and metadata:
     {
         'Queues': [{'QueueName': '...', 'QueueUrl': '...', 'Region': '...'}, ...],
         'QueueUrls': [...],
@@ -242,8 +250,8 @@ Returns:
 
 Raises:
 
-- ClientError: If SQS list operation fails (caught and returned)
-- NoCredentialsError: If credentials missing (caught and returned)
+        ClientError: If AWS service returns an error
+        NoCredentialsError: If AWS credentials are not available
 
 Example:
 
@@ -272,13 +280,17 @@ Purpose:
 
 Args:
 
-- executor: object — Glue executor context
-- queue_url (str): URL of the queue
-- receipt_handle (str): Receipt handle obtained from receive_message
-- region, aws_access_key_id, aws_secret_access_key, aws_session_token: optional
+        executor: Glue executor context (for logging compatibility)
+        queue_url (str): The URL of the SQS queue
+        receipt_handle (str): Receipt handle of the message to delete
+        region (str): AWS region name (default: None, uses default region)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
+    
 
 Returns:
-dict — example:
+dict — Deletion result and metadata
 
 ```
 { 
@@ -290,8 +302,8 @@ dict — example:
 
 Raises:
 
-- ClientError: If SQS deletion fails (caught and returned)
-- NoCredentialsError: If credentials missing (caught and returned)
+        ClientError: If AWS service returns an error
+        NoCredentialsError: If AWS credentials are not available
 
 Example:
 
@@ -316,12 +328,15 @@ Purpose:
 
 Args:
 
-- executor: object — Glue executor context
-- queue_url (str): URL of the queue to purge
-- region, aws_access_key_id, aws_secret_access_key, aws_session_token: optional
+        executor: Glue executor context (for logging compatibility)
+        queue_url (str): The URL of the SQS queue
+        region (str): AWS region name (default: None, uses default region)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
 
 Returns:
-dict — example:
+dict — Purge result and metadata
 
 ```
 { 
@@ -333,8 +348,8 @@ dict — example:
 
 Raises:
 
-- ClientError: If purge fails (caught and returned)
-- NoCredentialsError: If credentials missing (caught and returned)
+        ClientError: If AWS service returns an error
+        NoCredentialsError: If AWS credentials are not available
 
 Example:
 
@@ -362,9 +377,15 @@ Purpose:
 
 Args:
 
-- executor: object — Glue executor context
-- queue_url (str): URL of the SQS queue
-- messages (list[dict]):
+        executor: Glue executor context (for logging compatibility)
+        queue_url (str): The URL of the SQS queue
+        MessageBody, and optional DelaySeconds, MessageAttributes
+        region (str): AWS region name (default: None, uses default region)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
+        messages (list): List of message dictionaries with keys: Id, 
+    
     - Example message dict:
     ```
     { 
@@ -374,10 +395,9 @@ Args:
         'MessageAttributes': {...} 
     }
     ```
-- region, aws_access_key_id, aws_secret_access_key, aws_session_token: optional
-
 Returns:
-dict — example:
+dict — Batch send result and metadata
+example:
 
 ```
     {
@@ -393,8 +413,8 @@ dict — example:
 
 Raises:
 
-- ClientError: If batch send fails (caught and returned)
-- NoCredentialsError: If credentials missing (caught and returned)
+        ClientError: If AWS service returns an error
+        NoCredentialsError: If AWS credentials are not available
 
 Example:
 
@@ -426,14 +446,17 @@ Purpose:
 
 Args:
 
-- executor: object — Glue executor context
-- queue_name (str): Name of the SQS queue
-- region (str): AWS region (optional)
-- queue_owner_aws_account_id (str): Optional account ID when accessing a queue owned by another account
-- aws_access_key_id, aws_secret_access_key, aws_session_token: optional
+        executor: Glue executor context (for logging compatibility)
+        queue_name (str): The name of the SQS queue
+        region (str): AWS region name (default: None, uses default region)
+        queue_owner_aws_account_id (str): AWS account ID of the queue owner (for cross-account access)
+        aws_access_key_id (str): AWS access key ID (optional)
+        aws_secret_access_key (str): AWS secret access key (optional)
+        aws_session_token (str): AWS session token (optional)
 
 Returns:
-dict — example:
+dict — Queue URL and metadata
+example:
 
 ```
     { 
@@ -444,9 +467,8 @@ dict — example:
 ```
 
 Raises:
-
-- ClientError: If SQS get_queue_url fails (caught and returned)
-- NoCredentialsError: If credentials missing (caught and returned)
+        ClientError: If AWS service returns an error
+        NoCredentialsError: If AWS credentials are not available
 
 Example:
 

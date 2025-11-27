@@ -38,7 +38,7 @@ parameter.
 
 **Returns:**
 
-- None. Writes file as a side effect.
+- None. Writes file.
 
 **Raises:**
 

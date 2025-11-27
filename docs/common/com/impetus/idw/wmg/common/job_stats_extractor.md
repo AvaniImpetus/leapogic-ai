@@ -1,169 +1,49 @@
-# job_stats_extractor.py
+# GlueJobStatsExtractor Class
 
-## File Overview
-This module provides the `GlueJobStatsExtractor` class for extracting and reporting AWS Glue job execution statistics (start time, end time, execution duration, capacity allocation, worker details, DPU consumption). Supports single job analysis or bulk analysis of multiple jobs.
+## Overview
+The `GlueJobStatsExtractor` class is a utility for extracting and reporting execution statistics from AWS Glue jobs. It retrieves details such as start/end times, execution duration, capacity allocation, worker configurations, and DPU consumption from the last successful run of specified jobs. The class supports analysis of single or multiple jobs and can generate Excel reports. It does not inherit from any base class but uses Glue utilities for client creation and parameter retrieval.
 
-## Class Index
-1. `GlueJobStatsExtractor`
+## What It Does
+- Analyzes AWS Glue job runs to extract performance and execution metrics.
+- Identifies the last successful run for each job and pulls detailed statistics.
+- Supports processing of the current job (when no arguments provided), a single job, or multiple jobs (via comma-separated string or list).
+- Prints formatted statistics to the console and optionally saves them to an Excel file.
+- Provides insights into job efficiency, resource usage, and execution times for monitoring and optimization.
 
----
+## Arguments
+The primary method `extract()` accepts the following argument:
 
-## Classes
+- `job_name` (str, list, set, optional): Specifies the job(s) to analyze. 
+  - If `None` (default), analyzes the current Glue job using parameters from the job arguments.
+  - If a string, can be a single job name or comma-separated job names.
+  - If a list or set, contains multiple job names.
+  No other arguments are required, as the class handles Glue client creation and region detection internally.
 
-### GlueJobStatsExtractor
-**Purpose:**  
-Extracts execution statistics from Glue job runs and generates reports in Excel format. Provides analysis for single or multiple jobs.
+## Usage
+The `GlueJobStatsExtractor` class is used for post-execution analysis of Glue jobs to gather metrics for reporting, troubleshooting, or performance tuning. It is particularly useful in ETL pipelines where job statistics need to be logged or exported for compliance or optimization purposes. The output includes key metrics that help assess job performance and resource utilization.
 
----
+### Key Features
+- **Flexible Job Selection**: Supports current job, single job, or batch processing of multiple jobs.
+- **Last Successful Run Focus**: Automatically targets the most recent successful execution for accurate metrics.
+- **Comprehensive Metrics**: Extracts detailed stats including execution time, DPU seconds, worker types, and capacities.
+- **Console and File Output**: Prints stats to console and optionally generates timestamped Excel reports.
+- **AWS Integration**: Uses boto3 for Glue API interactions and integrates with Glue utilities for seamless operation.
 
-## Methods
+## Exceptions
+- **Exception**: Raised if the job name cannot be determined from job arguments when `job_name` is `None`.
+- **Exception**: Raised if the job run ID cannot be found for the current job.
+- **boto3 Exceptions**: May occur during Glue API calls, such as `ClientError` for access denied, invalid job names, or network issues.
+- **pandas Exceptions**: If saving reports, exceptions from DataFrame operations (e.g., file write failures) may propagate.
+- General exceptions from Glue client creation or region detection if AWS configurations are incorrect.
 
-### extract()
-**Purpose:**  
-Main extraction method. Analyzes Glue job(s) and retrieves their execution statistics. Supports no arguments (current job), single job name, comma-separated list, or list/set of job names.
+## How to Use It
+1. Instantiate the `GlueJobStatsExtractor` class.
+2. Call the `extract()` method with optional `job_name`:
+   - For current job: `extractor.extract()`
+   - For a single job: `extractor.extract('my-glue-job')`
+   - For multiple jobs: `extractor.extract(['job1', 'job2'])` or `extractor.extract('job1,job2')`
+3. View console output for statistics; optionally provide an `output_path` to `get_jobs_detail()` for Excel export.
+4. Ensure AWS credentials are configured for Glue access, and run within a Glue environment for automatic parameter resolution.
 
-**Args:**
-- `job_name` (str, list, set, optional): Job name(s) to analyze. If `None`, analyzes the current job. Can be:
-  - Single job name (str)
-  - Comma-separated job names (str)
-  - List or set of job names
-
-**Returns:**
-- None. Calls underlying methods and logs results.
-
-**Raises:**
-- `Exception`: If job name or run ID cannot be determined.
-
-**Example:**
-```python
-extractor = GlueJobStatsExtractor()
-extractor.extract()  # Extracts stats for current job
-extractor.extract('my-etl-job')  # Single job
-extractor.extract('job1,job2,job3')  # Multiple jobs
-```
-
----
-
-### get_jobs_detail()
-**Purpose:**  
-Retrieves execution details for multiple jobs. Finds the last successful run for each job and extracts statistics.
-
-**Args:**
-- `glue_client` (boto3 client): Glue service client.
-- `job_names` (list): List of job names to analyze.
-- `output_path` (str, optional): S3 or local path where Excel report will be saved. Default: `None`.
-
-**Returns:**
-- None. Logs progress and optionally saves report.
-
-**Raises:**
-- Exception from Glue API if jobs cannot be retrieved.
-
-**Example:**
-```python
-extractor.get_jobs_detail(glue_client, ['job1', 'job2', 'job3'], output_path='/tmp/stats')
-```
-
----
-
-### save_report()
-**Purpose:**  
-Saves job statistics to an Excel file with a timestamped filename.
-
-**Args:**
-- `rows` (list): List of dictionaries containing job stats (one dict per job).
-- `output_path` (str): Directory path where the Excel file will be saved.
-
-**Returns:**
-- None. Creates Excel file as side effect.
-
-**Raises:**
-- Exception if file write fails (propagated from pandas).
-
-**Example:**
-```python
-rows = [{'Job Name': 'job1', 'Execution Time': 120, ...}, ...]
-save_report(rows, '/tmp/output')
-# Creates file: /tmp/output/data_2023_12_15_14_30_22.xlsx
-```
-
-**Notes:**
-- File is named with timestamp: `data_{YYYY}_{MM}_{DD}_{HH}_{MM}_{SS}.xlsx`.
-- Uses pandas DataFrame to write Excel file.
-
----
-
-### get_job_last_success_run()
-**Purpose:**  
-Finds the most recent successful job run for a given job.
-
-**Args:**
-- `glue_client` (boto3 client): Glue service client.
-- `job_name` (str): Name of the job.
-
-**Returns:**
-- `dict` or `None`: Job run details (including `'Id'` field) if successful run found; `None` if no successful runs exist.
-
-**Raises:**
-- Exception if Glue API call fails.
-
-**Example:**
-```python
-run = extractor.get_job_last_success_run(glue_client, 'my-job')
-if run:
-    print(f"Last success run ID: {run['Id']}")
-```
-
----
-
-### get_job_details()
-**Purpose:**  
-Extracts detailed statistics for a specific job run. Prints formatted output to console and returns a dictionary of stats.
-
-**Args:**
-- `glue_client` (boto3 client): Glue service client.
-- `job_name` (str): Name of the job.
-- `job_run_id` (str): Run ID of the specific job execution.
-
-**Returns:**
-- `dict`: Dictionary with keys:
-  - `'Job Name'`: Job name
-  - `'Last Run ID'`: Job run ID
-  - `'Start Time'`: Start timestamp
-  - `'End Time'`: End timestamp
-  - `'Execution Time'`: Duration in seconds
-  - `'Allocated Capacity'`: Allocated DPU/capacity
-  - `'Max Capacity'`: Max allocated capacity
-  - `'Worker Type'`: Type of workers (e.g., G.2X, G.1X)
-  - `'Number Of Workers'`: Worker count
-  - `'DPU Seconds'`: Total DPU-seconds consumed
-
-**Raises:**
-- Exception if job run cannot be retrieved.
-
-**Example:**
-```python
-stats = extractor.get_job_details(glue_client, 'my-job', 'jr-12345')
-print(stats['Execution Time'])  # Output: 250 (seconds)
-```
-
----
-
-### get_glue_client()
-**Purpose:**  
-Creates and returns a Glue service boto3 client.
-
-**Args:**
-- `region_name` (str, optional): AWS region name. If not provided, uses `glue_utils.get_aws_region()`.
-
-**Returns:**
-- boto3 Glue client.
-
-**Raises:**
-- Exception if Glue client cannot be created.
-
-**Example:**
-```python
-client = GlueJobStatsExtractor.get_glue_client('us-east-1')
-```
+The class is designed for integration into Glue workflows or standalone scripts for job monitoring.
 

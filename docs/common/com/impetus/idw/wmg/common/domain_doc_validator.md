@@ -1,139 +1,52 @@
-# domain_doc_validator.py
+# DomainDocumentValidator Class
 
 ## Overview
+The `DomainDocumentValidator` class is a Glue ELT step that validates domain-level documentation files stored in S3 against a set of template files. It ensures that documentation artifacts (such as Excel workbooks, CSVs, PDFs, DOCX files, etc.) for a specific domain match the expected templates by comparing file presence, workbook sheet names, and column headers. The class generates an Excel validation report and optionally sends it via email. It inherits from `GlueELTStep` and relies on S3 utilities for file operations.
 
-`domain_doc_validator.py` provides the `DomainDocumentValidator` step (subclass of `GlueELTStep`) to validate
-domain-level documentation files in S3 against a set of template files.
+## What It Does
+- Lists files in specified template and domain S3 prefixes.
+- Normalizes filenames to handle minor differences (e.g., spaces, underscores, domain name variations) for accurate matching.
+- For Excel files, compares sheet names and column headers between template and domain files, identifying matches, missing sheets, missing columns, and extra columns.
+- For non-Excel files, checks only for file presence or absence.
+- Flags discrepancies such as missing files, extra files in the domain folder, and column mismatches.
+- Produces a timestamped Excel report summarizing validation outcomes and uploads it to the configured S3 output prefix.
+- Optionally sends the report as an email attachment if sender and recipient email parameters are provided.
 
-It is intended to help ensure that documentation artifacts (Excel workbooks, CSVs, PDFs, DOCX, etc.) provided for a
-domain match an expected set of templates. The step compares file presence, workbook sheet names and column headers and
-generates a single Excel validation report. It can also email the resulting report when email parameters are supplied.
+## Arguments
+The class expects the following job arguments, retrieved via `self.get_param_value`:
 
-This guide explains the step's purpose, how it works, the parameters it expects, the key methods and their behavior,
-examples for testing, best practices, and troubleshooting tips.
+- `BUCKET_NAME` (required): S3 bucket name where template and domain files are located.
+- `TEMPLATE_PREFIX` (required): S3 prefix (folder path) for template files.
+- `DOMAIN_PREFIX` (required): S3 prefix for domain files to be validated.
+- `OUTPUT_PREFIX` (required): S3 prefix where the generated Excel report will be saved.
+- `DOMAIN_NAME` (required): Short name of the domain, used for filename normalization and report naming.
+- `SENDER_EMAIL` (optional): Email address for sending the report. Required for email functionality.
+- `RECIPIENT_EMAIL` (optional): Recipient email address for the report. Required for email functionality.
 
----
+## Usage
+The `DomainDocumentValidator` class is designed for ETL workflows to automate documentation validation. It compares domain-specific files against templates, highlighting inconsistencies to ensure compliance. The output is a comprehensive Excel report that can be reviewed manually or integrated into further processing. Email notification provides immediate alerts for validation results.
 
-## High-level behavior
+### Key Features
+- **Filename Normalization**: Handles variations in filenames (e.g., spaces vs. underscores, domain name inclusion) to improve matching accuracy.
+- **Excel-Specific Validation**: Deep comparison of Excel workbooks, including sheet names and column headers.
+- **Comprehensive Reporting**: Generates detailed Excel reports with statuses like MATCHED, MISSING_FILE, MISSING_SHEET, MISSING_COLUMNS, and EXTRA_FILE.
+- **Email Integration**: Optional email sending of the report for notifications.
+- **S3 Integration**: Direct reading from and writing to S3 buckets using boto3 and custom S3 utilities.
 
-- Lists files in a `template` S3 prefix and `domain` S3 prefix.
-- Normalizes filenames so minor differences (spaces, underscores, domain part) don't break matching.
-- For Excel files, compares sheet names and header columns per sheet.
-- Flags missing files, missing sheets, missing columns, extra columns and extra files present in domain folder.
-- Produces an Excel report with per-template-row outcomes and uploads it to the configured output prefix.
-- Optionally sends the report by email when `SENDER_EMAIL` and `RECIPIENT_EMAIL` parameters are provided.
+## Exceptions
+- **ValueError**: Raised if any required parameters (`BUCKET_NAME`, `TEMPLATE_PREFIX`, `DOMAIN_PREFIX`, `OUTPUT_PREFIX`, `DOMAIN_NAME`) are missing or empty.
+- **S3-Related Exceptions**: May occur during file listing, object retrieval, or upload operations (e.g., boto3 exceptions for invalid buckets, keys, or permissions).
+- **Excel Parsing Errors**: Logged as errors if Excel files cannot be read (e.g., corrupted files), but processing continues with "ERROR" placeholders in the report.
+- **Email Sending Failures**: If email parameters are provided but sending fails (e.g., SMTP issues), it is logged as an error, but the report is still generated and uploaded.
 
----
+## How to Use It
+1. Prepare template files in an S3 bucket under the specified `TEMPLATE_PREFIX`.
+2. Place domain files to validate under the `DOMAIN_PREFIX` in the same bucket.
+3. In the Glue/ELT framework, configure the job with the required parameters:
+   - `BUCKET_NAME`: The S3 bucket.
+   - `TEMPLATE_PREFIX`, `DOMAIN_PREFIX`, `OUTPUT_PREFIX`: Respective S3 prefixes.
+   - `DOMAIN_NAME`: Domain identifier.
+   - Optionally, `SENDER_EMAIL` and `RECIPIENT_EMAIL` for notifications.
+4. Instantiate `DomainDocumentValidator` and run it via the framework's executor.
 
-## Expected parameters
 
-Callers set job parameters (the step reads them using `self.get_param_value`). The important keys are:
-
-- `BUCKET_NAME` (str) — S3 bucket where template and domain files live (required)
-- `TEMPLATE_PREFIX` (str) — S3 prefix (folder) for template files; step lists files under this prefix (required)
-- `DOMAIN_PREFIX` (str) — S3 prefix for domain files to validate (required)
-- `OUTPUT_PREFIX` (str) — S3 prefix where the generated Excel report will be saved (required)
-- `DOMAIN_NAME` (str) — short name of the domain; used when normalizing filenames and constructing report names (
-  required)
-- `SENDER_EMAIL` (str) — optional; if provided (and `RECIPIENT_EMAIL` present) the step attempts to email the generated
-  report
-- `RECIPIENT_EMAIL` (str) — optional; recipient for the emailed report
-
-Notes:
-
-- The step raises ValueError when any of the required values is missing.
-- `SENDER_EMAIL` and `RECIPIENT_EMAIL` are optional — if either is missing the step skips sending email but still writes
-  the report.
-
----
-
-## Key methods and behavior
-
-This section describes each method and what it does.
-
-### executeFlow(self, executor, **kwargs)
-
-The single public entry that orchestrates the validation. Steps performed:
-
-1. Read and validate required parameters.
-2. Initialize an S3 client via `boto3.client('s3')`.
-3. Use `get_file_names(bucket, prefix)` to list files under template and domain prefixes.
-4. Normalize domain filenames with `normalize_filename` so templates and domain files compare more robustly.
-5. Iterate over template files:
-    - If file is an Excel workbook (`.xlsx`/`.xls`) then call `get_excel_sheet_columns` for both template and matching
-      domain file (if present).
-    - Compare sheet-level columns and build report rows
-      indicating `MATCHED`, `MISSING_FILE`, `MISSING_SHEET`, `MISSING_COLUMNS` or similar statuses.
-    - For non-Excel files, only file presence/absence is validated.
-6. Find and report extra files that are present in the domain prefix but not in template list.
-7. Build a pandas DataFrame with report rows and write an Excel report to S3.
-8. Optionally send an email with the report path as an attachment if `SENDER_EMAIL` and `RECIPIENT_EMAIL` are provided.
-
-Important implementation notes:
-
-- The method uses localized IST (UTC+5:30) timestamps to construct the report name.
-- Uploading is performed by `pandas.DataFrame.to_excel(output_file_path, ...)` in the code; ensure the environment
-  permits writing to S3 paths or adapt this to use the project's `s3_utils` helper to perform a safe upload when
-  required.
-
----
-
-## Output / Report format
-
-The Excel report contains one row per template-sheet (or per template file for non-excel types) with the following
-columns:
-
-- Template File — file name from template prefix
-- Domain File — matched file name from domain prefix or `MISSING`
-- Sheet Name — sheet name (for Excel) or `N/A`
-- Status — one of `MATCHED`, `MISSING_FILE`, `MISSING_SHEET`, `MISSING_COLUMNS`, `EXTRA_FILE`, etc.
-- Available Columns — comma-separated columns present in domain file that match template
-- Missing Columns — comma-separated missing columns relative to template
-- Extra Columns — comma-separated extra columns present in domain file but not in template
-
-The file is named like: `{DOMAIN_NAME}_validation_report_<YYYYMMDD_HHMMSS>.xlsx` and is written
-to `s3://{BUCKET_NAME}/{OUTPUT_PREFIX}/{file}`.
-
----
-
-## Examples
-
-### Example 1 — Quick local test with a mock s3_utils
-
-You can unit-test the core logic by mocking `s3u.list_files` and the S3 client responses for Excel bytes.
-
-```py
-from com.impetus.idw.wmg.common.domain_doc_validator import DomainDocumentValidator
-
-class FakeS3Client:
-    def get_object(self, Bucket, Key):
-        # Return a simple Excel workbook bytes for testing
-        import pandas as pd
-        from io import BytesIO
-        df = pd.DataFrame({'col1': [], 'col2': []})
-        bio = BytesIO()
-        with pd.ExcelWriter(bio) as w:
-            df.to_excel(w, sheet_name='Sheet1', index=False)
-        bio.seek(0)
-        return {'Body': BytesIO(bio.read())}
-
-# Monkeypatch s3u.list_files to return test file names
-import com.impetus.idw.wmg.common.s3_utils as s3u
-s3u.list_files = lambda bucket, prefix: ['templates/Account_Template.xlsx']
-
-# Instantiate and set parameters
-step = DomainDocumentValidator()
-step.set_param_value('BUCKET_NAME', 'my-bucket')
-step.set_param_value('TEMPLATE_PREFIX', 'templates/')
-step.set_param_value('DOMAIN_PREFIX', 'domains/account/')
-step.set_param_value('OUTPUT_PREFIX', 'reports/')
-step.set_param_value('DOMAIN_NAME', 'Account')
-# Provide emails if you want to test send_mail flow; otherwise omit
-
-# Call executeFlow with a fake executor (not used directly for S3 reads in this step)
-step.executeFlow(executor=None)
-
-# Verify that the report is generated (inspect s3u output or where to_file writes)
-```
-
----

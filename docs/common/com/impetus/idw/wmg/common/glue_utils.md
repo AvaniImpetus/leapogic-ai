@@ -7,88 +7,25 @@ database authentication, S3 file operations, Glue job execution, and workflow pa
 Glue and AWS service interactions into reusable helper functions.
 
 ## Function Index
-
-1. `get_aws_region()`
-2. `get_glue_client()`
-3. `generate_db_auth_token()`
-4. `get_secret_values()`
-5. `get_secret_values_from_cross_account()`
-6. `read_file_from_s3()`
-7. `get_current_job_attached_iam_role()`
-8. `get_current_job_attached_connections()`
-9. `get_value_for_job_argument()`
-10. `get_job_timeout_value()`
-11. `get_connection_detail()`
-12. `copy_file_from_local_to_s3()`
-13. `copy_file_from_s3_to_local()`
-14. `get_current_glue_workflow_run_id()`
-15. `get_current_glue_workflow_name()`
-16. `get_value_for_workflow_argument()`
-17. `execute_glue_job()`
+1. `generate_db_auth_token()`
+2. `get_secret_values()`
+3. `get_secret_values_from_cross_account()`
+4. `read_file_from_s3()`
+5. `get_current_job_attached_iam_role()`
+6. `get_current_job_attached_connections()`
+7. `get_value_for_job_argument()`
+8. `get_job_timeout_value()`
+9. `get_connection_detail()`
+10. `copy_file_from_local_to_s3()`
+11. `copy_file_from_s3_to_local()`
+12. `get_current_glue_workflow_run_id()`
+13. `get_current_glue_workflow_name()`
+14. `get_value_for_workflow_argument()`
+15. `execute_glue_job()`
 
 ---
 
 ## Functions
-
-### get_aws_region()
-
-**Purpose:**  
-Retrieves the current AWS region from the `AWS_DEFAULT_REGION` environment variable.
-
-**Args:**
-
-- None.
-
-**Returns:**
-
-- `str`: The AWS region name (e.g., `"us-east-1"`).
-
-**Raises:**
-
-- `KeyError`: If `AWS_DEFAULT_REGION` environment variable is not set.
-
-**Example:**
-
-```python
-region = get_aws_region()
-print(region)  # Output: "us-east-1"
-```
-
----
-
-### get_glue_client()
-
-**Purpose:**  
-Creates and returns an AWS service client (thread-safe) with optional credentials and region configuration. Acquires a
-lock during client creation.
-
-**Args:**
-
-- `executor` (object): The executor object (used for lock acquisition/release).
-- `service_name` (str): AWS service name (
-  e.g., `"s3"`, `"redshift"`, `"glue"`, `"rds"`, `"sts"`, `"secretsmanager"`, `"logs"`).
-- `region_name` (str, optional): AWS region name. If not provided, uses `get_aws_region()`.
-- `aws_access_key_id` (str, optional): AWS access key ID for custom credentials.
-- `aws_secret_access_key` (str, optional): AWS secret access key.
-- `aws_session_token` (str, optional): AWS session token for temporary credentials.
-- `endpoint_url` (str, optional): Custom endpoint URL for the service.
-
-**Returns:**
-
-- A boto3 client for the specified service.
-
-**Raises:**
-
-- Exception propagated from boto3 if client creation fails.
-
-**Example:**
-
-```python
-s3_client = get_glue_client(executor, 's3')
-redshift_client = get_glue_client(executor, 'redshift', region_name='us-west-2')
-```
-
----
 
 ### generate_db_auth_token()
 
@@ -182,7 +119,7 @@ conn_dict = get_secret_values_from_cross_account(executor, secrets, role_arn)
 ### read_file_from_s3()
 
 **Purpose:**  
-Reads the contents of a file from S3 and returns it as a decoded string.
+Reads the contents of a file from S3 and returns it as a string.
 
 **Args:**
 
@@ -191,7 +128,7 @@ Reads the contents of a file from S3 and returns it as a decoded string.
 
 **Returns:**
 
-- `str`: The file contents as a decoded string.
+- `str`: The file contents as a string.
 
 **Raises:**
 
@@ -344,7 +281,7 @@ print(conn['url'])  # Output: "jdbc:postgresql://host:5432/db"
 ### copy_file_from_local_to_s3()
 
 **Purpose:**  
-Uploads a file from the local filesystem to S3.
+Uploads/Copy a file from the local filesystem to S3.
 
 **Args:**
 
@@ -371,7 +308,7 @@ copy_file_from_local_to_s3(executor, "/tmp/data.csv", "s3://my-bucket/uploads/da
 ### copy_file_from_s3_to_local()
 
 **Purpose:**  
-Downloads a file from S3 to the local filesystem.
+Downloads/Copy a file from S3 to the local filesystem.
 
 **Args:**
 

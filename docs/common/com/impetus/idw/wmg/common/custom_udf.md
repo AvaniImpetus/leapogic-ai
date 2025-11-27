@@ -3,21 +3,8 @@
 This module provides a small set of user-defined functions (UDFs) intended for PySpark usage and general utility within
 ETL flows. The functions implement common behaviors found in database/ETL systems:
 
-- `instr` — find the Nth occurrence of a substring (Teradata-like behavior);
-- `sequence` / `reset_sequence` / `remove_sequence` — in-memory sequence generator helpers for simple numeric
-  sequencing;
-- `to_decimal_informatica` — parse a string into a decimal/float similar to Informatica's TO_DECIMAL semantics.
-
 The module also exposes `custom_udf_mapping` which maps user-friendly UDF names to Python callables and their Spark
 return types for convenient registration in Spark sessions.
-
-Notes
-: - These helpers are lightweight and in-memory. `sequence` and its helpers store state in a module-level dictionary and
-are intended for short-lived processes (not distributed, not persistent across executors without additional handling).
-- `instr` and `to_decimal_informatica` are pure functions and safe to use as Spark UDFs (stateless). `sequence` is
-stateful — if used with Spark UDFs across executors you will not get a cluster-wide monotonic counter.
-
----
 
 ## List of functions
 
@@ -33,8 +20,9 @@ stateful — if used with Spark UDFs across executors you will not get a cluster
 ## `instr()`
 
 Purpose
-: Mimics Teradata's INSTR behavior. Finds the 1-based position of the N-th occurrence of `search_string`
-inside `input_string` starting from `start_position`. Returns 0 if not found or when inputs are invalid.
+    Mimics Teradata INSTR behavior:
+    Returns the position (1-based index) of the N-th occurrence of a substring starting from StartPosition.
+    Returns 0 if not found.
 
 Args
 : 
@@ -44,7 +32,7 @@ Args
 - `occurrence (int, optional)`: The N-th occurrence to locate (default `1`).
 
 Returns
-: `int` — 1-based index position of the matched substring, or `0` if not found or invalid input.
+:  1-based index of the found substring, or `0` if not found or invalid input.
 
 Raises
 : None explicitly; function handles invalid inputs and returns `0` for common invalid cases.
@@ -74,12 +62,12 @@ Purpose
 
 Args
 : 
-  - `seq_name (str)`: Identifier for the sequence (kept in module-level state).
+  - `seq_name (str)`: Identifier for the sequence.
   - `start_value (int)`: Initial value when the sequence is first created.
   - `step (int)`: Amount to increment on subsequent calls (can be negative).
 
 Returns
-: `int` — Current value for the sequence after the call (first call returns `start_value`).
+: `int` —next value in sequence.
 
 Raises
 : None explicitly; the function assumes numeric inputs for `start_value` and `step`.
@@ -87,10 +75,8 @@ Raises
 Example
 : 
 ```py
-sequence('s1', 1, 1)  # returns 1
-sequence('s1', 1, 1)  # returns 2
-sequence('s2', 100, -2)  # returns 100
-sequence('s2', 100, -2)  # returns 98
+sequence('s1', 1, 1)  # returns 1,2,3 ...
+sequence('s2', 100, -2)  # returns 100. 98, 96
 ```
 
 Notes
@@ -120,7 +106,6 @@ Example
 : 
 ```py
 reset_sequence('s1', 1)
-sequence('s1', 1, 1)  # returns 1
 ```
 
 Notes
@@ -158,13 +143,15 @@ Notes
 ## `to_decimal_informatica()`
 
 Purpose
-: Convert a free-form string into a Python float replicating common Informatica `TO_DECIMAL` behaviors.
+: Converts a string to a decimal value, replicating the behavior of Informatica's TO_DECIMAL function.
+
 
 Behavior summary
-: - Returns `None` when input is `None`.
-- Returns `0.0` for empty string or when the first character is non-numeric (excluding leading `-`).
-- Replaces `,` with `.` to support comma decimal separators before parsing.
-- Extracts the leading numeric token (optional fractional part) and returns it as a float.
+:   - If the string starts with numeric characters (or a minus sign), it parses until the first non-numeric character.
+    - If the first character is non-numeric (excluding a minus sign), it returns 0.0.
+    - If the input is NULL (None), it returns None.
+    - If the input is an empty string, it returns 0.0.
+    - If the string uses a comma (,) as a decimal separator, it is converted to a dot (.) before parsing.
 
 Args
 : - `input_str (str or None)`: The input string to convert.
@@ -194,29 +181,3 @@ returned.
 
 ---
 
-## custom_udf_mapping
-
-Purpose
-: A convenience dictionary mapping short UDF registration names to a mapping of the Python callable and its expected
-Spark `DataType`. This can be used to register UDFs with PySpark as follows:
-
-Example (registering with SparkSession)
-: 
-```py
-from pyspark.sql import SparkSession
-from pyspark.sql.types import IntegerType, DoubleType
-from com.impetus.idw.wmg.common import custom_udf as cu
-
-spark = SparkSession.builder.getOrCreate()
-for udf_name, m in cu.custom_udf_mapping.items():
-for func, spark_type in m.items():
-spark.udf.register(udf_name, func, spark_type)
-
-```
-
-Notes
-: 
-  - The mapping preserves the original function objects and the Spark return types (e.g., `IntegerType()`, `DoubleType()`).
-  - `udf_sequence` maps to a stateful Python function — using it as a Spark UDF across executors does not provide a global monotonic sequence and is generally unsafe in distributed contexts.
-
----

@@ -1,0 +1,37 @@
+[
+  {
+    "Question": "How do I read messages from SQS?",
+    "Answer": "Use the read_message function...",
+    "Feedback": "helpful",
+    "Sources": "aws_sqs_utils.md",
+    "Timestamp": "2025-11-25T15:50:54.340998"
+  },
+  {
+    "Question": "What are the arguments for read_message?",
+    "Answer": "The arguments are executor, queue_url...",
+    "Feedback": "helpful",
+    "Sources": "aws_sqs_utils.md",
+    "Timestamp": "2025-11-25T15:50:54.341151"
+  },
+  {
+    "Question": "How does LeapLogic convert the QUALIFY clause from Teradata to PySpark?",
+    "Answer": "Based on the provided knowledge base, LeapLogic handles the conversion of Teradata code to PySpark in several ways:\n\n*   **QUALIFY Clause:** It converts the `QUALIFY` clause into a subquery (`DerivedTable`) and moves the condition to a `WHERE` clause in the outer query.\n*   **Casting:** It automatically applies `CAST` functions to ensure data type compatibility during `INSERT` operations.\n*   **COALESCE:** It wraps columns with `COALESCE` functions to handle null entries for tables with `NOT NULL` constraints.\n*   **Collate Handling:** It applies `rtrim()` for collation and `upper()` for case-insensitive comparisons.\n*   **View to Table Replacement:** It replaces INSERT into views with the underlying table names.\n*   **Multi-Argument COALESCE:** It nests `COALESCE` functions to handle multiple arguments.\n*   **Asterisk (\\*) Replacement:** It replaces `SELECT *` with explicit column names in view conversions.\n*   **Identity Column Conversion:** It converts Teradata's `IDENTITY` columns to a simplified PySpark equivalent (e.g., `IDENTITY (1, 1)`).\n*   **Naming Conventions:** It converts all columns and tables to lowercase.\n*   **Casting & Coalesce in Nested Queries:** It optimizes by applying casting and COALESCE only in the outermost query.\n*   **Database Name Parameterization:** It parameterizes database names for flexibility across environments.\n*   **Generated Reports and Outputs:** It generates validation reports and consolidated outputs for quality assurance.\n\n\n\n",
+    "Feedback": "Not Marked",
+    "Sources": "teradata_to_pyspark.md",
+    "Timestamp": "2025-11-25T16:08:59.077884"
+  },
+  {
+    "Question": "How does LeapLogic convert the QUALIFY clause from Teradata to PySpark?",
+    "Answer": "Based on the provided knowledge base, LeapLogic handles the conversion of Teradata code to PySpark in several ways:\n\n*   **QUALIFY Clause:** It converts the `QUALIFY` clause into a subquery (`DerivedTable`) and moves the condition to a `WHERE` clause in the outer query.\n*   **Casting:** It automatically applies `CAST` functions to ensure data type compatibility during `INSERT` operations.\n*   **COALESCE:** It wraps columns with `COALESCE` functions to handle null entries for tables with `NOT NULL` constraints.\n*   **Collate Handling:** It applies `rtrim()` for collation and `upper()` for case-insensitive comparisons.\n*   **View to Table Replacement:** It replaces INSERT into views with the underlying table names.\n*   **Multi-Argument COALESCE:** It nests `COALESCE` functions to handle multiple arguments.\n*   **Asterisk (\\*) Replacement:** It replaces `SELECT *` with explicit column names in view conversions.\n*   **Identity Column Conversion:** It converts Teradata's `IDENTITY` columns to a simplified PySpark equivalent (e.g., `IDENTITY (1, 1)`).\n*   **Naming Conventions:** It converts all columns and tables to lowercase.\n*   **Casting & Coalesce in Nested Queries:** It optimizes by applying casting and COALESCE only in the outermost query.\n*   **Database Name Parameterization:** It parameterizes database names for flexibility across environments.\n*   **Generated Reports and Outputs:** It generates validation reports and consolidated outputs for quality assurance.\n\n\n\n",
+    "Feedback": "Not Marked",
+    "Sources": "teradata_to_pyspark.md",
+    "Timestamp": "2025-11-25T16:09:47.753818"
+  },
+  {
+    "Question": "integer is converted to",
+    "Answer": "The provided text shows that LeapLogic converts `TO_NUMBER` to `CAST` with a decimal type. \n\n**Teradata Input:** ```sql SELECT order_id, TO_NUMBER(amount_str) AS amount FROM orders_staging; ```\n**LeapLogic Converts to:** ```sql SELECT order_id, CAST(amount_str AS decimal) AS amount FROM orders_staging; ```",
+    "Feedback": "Not Marked",
+    "Sources": "teradata_to_pyspark.md",
+    "Timestamp": "2025-11-25T16:09:50.661292"
+  }
+]

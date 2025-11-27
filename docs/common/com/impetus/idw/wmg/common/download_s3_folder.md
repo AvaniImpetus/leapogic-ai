@@ -1,180 +1,45 @@
 # download_s3_folder.py
 
-## File Overview
+### zip_and_download_bucket()
 
-This module provides utility functions for downloading S3 folders, zipping directories, uploading files to S3, and batch
-downloading/zipping S3 bucket contents. It uses AWS CLI commands through subprocess and boto3 for S3 operations.
+**What It Does:**  
+This function orchestrates the process of downloading specified or all top-level folders from an S3 bucket, compressing them into a single ZIP archive, and uploading the ZIP file back to the same S3 bucket. It is designed for batch archiving or backup of S3 bucket contents, allowing selective inclusion of folders to reduce download size and time.
 
-## Method Index
+**Arguments:**  
+- `bucket_name` (str, required): The name of the S3 bucket to process. The function lists top-level folders (prefixes) in this bucket.
+- `include_folders` (list of str, optional): A list of folder prefixes to include in the download and ZIP. If `None` or empty, all top-level folders are included. Default: `None`.
 
-1. `download_s3_folder()`
-2. `zip_dir()`
-3. `upload_file()`
-4. `zip_and_download_bucket()`
+**Usage:**  
+The function is used for creating compressed backups of S3 bucket folders. It first lists all top-level folders using boto3, filters them based on `include_folders`, downloads each included folder recursively to a local temporary directory (`/tmp/{bucket_name}/`), zips the entire downloaded structure, and uploads the resulting ZIP file to the bucket root. This is useful for periodic archiving, data migration, or compliance backups where only certain folders need to be preserved.
 
----
+**Exceptions:**  
+- **boto3 Exceptions**: May occur during S3 operations, such as `ClientError` for access denied, invalid bucket, or network issues when listing objects or accessing the bucket.
+- **subprocess Exceptions**: Raised if AWS CLI commands (`aws s3 cp`) fail, e.g., due to missing AWS credentials, permissions, or command execution errors.
+- **OSError/FileNotFoundError**: If local directories cannot be created or accessed (e.g., permissions on `/tmp`).
+- **Zip Command Errors**: If the `zip` command fails (e.g., disk space issues or invalid paths).
+- General exceptions are not explicitly caught in the function; errors propagate and are handled at the module level in the try-except block.
 
-## Methods
+**How to Use It:**  
+1. Ensure AWS CLI is installed and configured with appropriate credentials for S3 access.
+2. Call the function with the bucket name and optionally a list of folders to include:
+   ```python
+   zip_and_download_bucket('my-bucket', include_folders=['data/', 'logs/'])
+   ```
+   This downloads only 'data/' and 'logs/' folders, zips them, and uploads `my-bucket.zip` to `s3://my-bucket/my-bucket.zip`.
+3. For all folders, omit `include_folders`:
+   ```python
+   zip_and_download_bucket('my-bucket')
+   ```
+4. Run the module directly for the hardcoded bucket:
+   ```bash
+   python download_s3_folder.py
+   ```
+   This processes 'bcbs-poc-oregon' with no folder filters.
 
-### 1. download_s3_folder()
-
-**Purpose:**  
-Downloads files from an S3 path to a local directory using AWS CLI (`aws s3 cp` command). Optionally supports recursive
-download of entire folders.
-
-**Args:**
-
-- `s3_path` (str): The S3 path from which to download (e.g., `s3://bucket-name/folder/`).
-- `local_dir` (str): The local directory path where files will be downloaded.
-- `recursive` (bool, optional): If `True`, downloads recursively; if `False`, downloads only the specified path.
-  Default: `True`.
-
-**Returns:**
-
-- None. Prints status messages to console.
-
-**Raises:**
-
-- No explicit exceptions raised; errors are printed to console via subprocess stderr.
-
-**Example:**
-
-```python
-download_s3_folder('s3://my-bucket/data/', '/tmp/data')
-# Output: "downloading s3 files from s3://my-bucket/data/ to /tmp/data recursively..."
-# Output: "download complete..."
-```
-
-**Notes:**
-
-- Uses subprocess to execute AWS CLI commands; requires AWS CLI to be installed and configured.
-- Prints download error messages (if any) to console but does not raise exceptions.
-- Output and error are printed for debugging purposes.
+**Notes:**  
+- Temporary files are stored in `/tmp/`, which may require sufficient disk space for large buckets.
+- The ZIP file is named `{bucket_name}.zip` and uploaded to the bucket root.
+- Skipped folders are logged to console.
+- Known issue: The function has a bug where it references `include_folder_names` instead of `include_folders` in the loop; this may cause a NameError if not defined externally.
 
 ---
-
-### 2. zip_dir()
-
-**Purpose:**  
-Recursively compresses a directory into a ZIP file using the system's `zip` command.
-
-**Args:**
-
-- `folder_path` (str): The absolute path to the folder to compress.
-- `zip_file_path` (str): The target path where the ZIP file will be created.
-
-**Returns:**
-
-- None. Prints status messages to console.
-
-**Raises:**
-
-- No explicit exceptions raised; errors are printed via subprocess stderr.
-
-**Example:**
-
-```python
-zip_dir('/tmp/my_folder', '/tmp/my_folder.zip')
-# Output: "zipping files from /tmp/my_folder to /tmp/my_folder.zip recursively..."
-# Output: "zip command complete..."
-```
-
-**Notes:**
-
-- Uses the system `zip` command (Unix/Linux/macOS).
-- Recursively includes all files and subdirectories.
-- Error messages are printed but not raised as exceptions.
-
----
-
-### 3. upload_file()
-
-**Purpose:**  
-Uploads a local file to an S3 bucket using AWS CLI (`aws s3 cp` command).
-
-**Args:**
-
-- `local_file_path` (str): The absolute path to the local file to upload.
-- `bucket_name` (str): The name of the S3 bucket (without `s3://` prefix).
-- `s3_key_name` (str): The key (path) in S3 where the file will be stored.
-
-**Returns:**
-
-- None. Prints status messages to console.
-
-**Raises:**
-
-- No explicit exceptions raised; errors are printed via subprocess stderr.
-
-**Example:**
-
-```python
-upload_file('/tmp/my_folder.zip', 'my-bucket', 'uploads/my_folder.zip')
-# Output: "uploading s3 file from /tmp/my_folder.zip to s3://my-bucket/uploads/my_folder.zip recursively..."
-# Output: "upload complete..."
-```
-
-**Notes:**
-
-- Uses AWS CLI; requires AWS credentials to be configured.
-- Output and errors are printed for debugging.
-
----
-
-### 4. zip_and_download_bucket()
-
-**Purpose:**  
-Downloads specified or all folders from an S3 bucket, zips them together, and uploads the resulting ZIP file back to S3.
-This is the main orchestration function.
-
-**Args:**
-
-- `bucket_name` (str): The S3 bucket name to download from.
-- `include_folders` (list, optional): List of specific folder prefixes to include in the download. If `None` or empty,
-  all folders are included. Default: `None`.
-
-**Returns:**
-
-- None. Downloads, zips, and uploads the result to S3.
-
-**Raises:**
-
-- No explicit exceptions caught; boto3 or subprocess errors propagate.
-
-**Example:**
-
-```python
-zip_and_download_bucket('my-bucket', include_folders=['folder1/', 'folder2/'])
-# Downloads folder1/ and folder2/, zips them, and uploads the ZIP to my-bucket/my-bucket.zip
-```
-
-**Notes:**
-
-- Uses boto3 to list S3 objects and boto3/AWS CLI to download and upload.
-- Temporary files are stored in `/tmp/` directory.
-- ZIP file is named after the bucket (e.g., `my-bucket.zip`).
-- Skips folders not in `include_folders` list (if provided); logs which folders are skipped.
-- **Known Issue:** Function references `include_folder_names` (undefined) instead of `include_folders` parameter in loop
-  condition. This may cause runtime error.
-
----
-
-## Module-Level Code
-
-The module contains a try-except block at the bottom that
-calls `zip_and_download_bucket('bcbs-poc-oregon', include_folders=[])`:
-
-```python
-try:
-    print('started....')
-    include_folder_names = []
-    zip_and_download_bucket('bcbs-poc-oregon', include_folders=include_folder_names)
-    print('completed...')
-except Exception as e:
-    print(f"error while running download process: {e}")
-    traceback.print_exc()
-```
-
-This is the entry point when the script is run directly. It processes the `bcbs-poc-oregon` bucket with no specific
-folder filters.
-
